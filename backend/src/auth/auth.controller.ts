@@ -105,12 +105,16 @@ export class AuthController {
     return this.config.get('NODE_ENV', { infer: true });
   }
 
+  private get accessTtlSeconds() {
+    return this.config.get('ACCESS_TOKEN_TTL_SECONDS', { infer: true });
+  }
+
   private refreshCookie(request: Request) {
     return readCookie(request, cookieNamesFor(this.nodeEnv).refresh);
   }
 
   private respond(response: Response, { user, tokens }: AuthResult) {
-    setAuthCookies(response, this.nodeEnv, tokens);
+    setAuthCookies(response, this.nodeEnv, tokens, this.accessTtlSeconds);
     return toUserResponse(user);
   }
 }

@@ -18,7 +18,10 @@ import { SessionsService } from './sessions.service.js';
     JwtModule.registerAsync({
       inject: [ConfigService],
       useFactory: (config: AppConfigService) =>
-        jwtOptions(config.get('JWT_ACCESS_SECRET', { infer: true })),
+        jwtOptions(
+          config.get('JWT_ACCESS_SECRET', { infer: true }),
+          config.get('ACCESS_TOKEN_TTL_SECONDS', { infer: true }),
+        ),
     }),
   ],
   controllers: [AuthController],

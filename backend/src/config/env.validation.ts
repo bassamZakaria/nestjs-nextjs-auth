@@ -56,6 +56,12 @@ export class EnvironmentVariables {
 
   @Type(() => Number)
   @IsInt()
+  @Min(1)
+  @Max(86400)
+  ACCESS_TOKEN_TTL_SECONDS = 900;
+
+  @Type(() => Number)
+  @IsInt()
   @Min(0)
   TRUST_PROXY_HOPS = 0;
 

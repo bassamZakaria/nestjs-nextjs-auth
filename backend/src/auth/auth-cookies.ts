@@ -8,8 +8,6 @@ export enum CookieName {
   HostRefresh = '__Host-refresh_token',
 }
 
-export const ACCESS_TOKEN_TTL_SECONDS = 15 * 60;
-
 type CookieNames = { access: CookieName; refresh: CookieName };
 
 export const cookieNamesFor = (nodeEnv: NodeEnv): CookieNames =>
@@ -39,12 +37,13 @@ export const setAuthCookies = (
   response: Response,
   nodeEnv: NodeEnv,
   tokens: IssuedTokens,
+  accessTtlSeconds: number,
 ) => {
   const names = cookieNamesFor(nodeEnv);
   const options = baseCookieOptions(nodeEnv);
   response.cookie(names.access, tokens.accessToken, {
     ...options,
-    maxAge: ACCESS_TOKEN_TTL_SECONDS * 1000,
+    maxAge: accessTtlSeconds * 1000,
   });
   response.cookie(names.refresh, tokens.refreshToken, {
     ...options,

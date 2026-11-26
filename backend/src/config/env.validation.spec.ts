@@ -13,9 +13,17 @@ describe('validateEnv', () => {
     expect(validateEnv(validEnv)).toMatchObject({
       HOST: '127.0.0.1',
       PORT: 4000,
+      ACCESS_TOKEN_TTL_SECONDS: 900,
       TRUST_PROXY_HOPS: 0,
       LOG_LEVEL: LogLevel.Info,
     });
+  });
+
+  it('parses a custom ACCESS_TOKEN_TTL_SECONDS', () => {
+    expect(
+      validateEnv({ ...validEnv, ACCESS_TOKEN_TTL_SECONDS: '60' })
+        .ACCESS_TOKEN_TTL_SECONDS,
+    ).toBe(60);
   });
 
   it('normalises APP_ORIGIN to a bare origin', () => {

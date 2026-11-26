@@ -61,7 +61,7 @@ Field rules are enforced on both sides: a valid email; a name of at least 3 char
 
 ### Session design
 
-- **Access token:** a JWT (HS256, 15 minutes) carrying the user id. Verification pins the algorithm and checks issuer, audience and expiry.
+- **Access token:** a JWT (HS256, 15 minutes by default, set by `ACCESS_TOKEN_TTL_SECONDS`) carrying the user id. Verification pins the algorithm and checks issuer, audience and expiry.
 - **Refresh token:** an opaque `<sessionId>.<family>.<secret>` value. The family is fixed for the life of the session; the secret changes on every refresh. MongoDB stores only SHA-256 hashes of both.
 - **Cookies:** both tokens live in `HttpOnly`, `SameSite=Strict` cookies, so page scripts can never read them. In production they are also `Secure` and use the `__Host-` name prefix.
 - **Rotation:** every refresh swaps the stored secret hash in one atomic update and issues a new refresh token. Presenting an older secret from the same family is treated as theft and revokes the session. A guessed session id without the family does nothing.
@@ -92,6 +92,7 @@ Field rules are enforced on both sides: a valid email; a name of at least 3 char
 | `MONGODB_URI` | required | |
 | `JWT_ACCESS_SECRET` | required | At least 32 characters |
 | `APP_ORIGIN` | required | The web app's origin, for example `http://localhost:3000` |
+| `ACCESS_TOKEN_TTL_SECONDS` | `900` | Access-token lifetime (1–86400). Set to `60` to see the silent refresh a minute after signing in |
 | `HOST` | `127.0.0.1` | Set to `0.0.0.0` in a container |
 | `PORT` | `4000` | |
 | `TRUST_PROXY_HOPS` | `0` | See "Running in production" |
