@@ -13,7 +13,7 @@ See [AI.md](AI.md) for how AI assistance was used.
 
 ## Run it locally
 
-Requirements: Node 22, npm 10 and Docker.
+Requirements: Node 22.22.3 or newer, npm 10 and Docker.
 
 ```bash
 # 1. MongoDB
