@@ -9,11 +9,22 @@ import request from 'supertest';
 import type { App } from 'supertest/types.js';
 import { Session } from '../src/auth/session.schema.js';
 import { AuthRoute, RoutePrefix, UsersRoute } from '../src/common/routes.js';
-import { NodeEnv } from '../src/config/env.validation.js';
+import { LogLevel, NodeEnv } from '../src/config/env.validation.js';
 import { User } from '../src/users/user.schema.js';
 
 export const APP_ORIGIN = 'http://localhost:3000';
 export const JWT_SECRET = 'test-secret-that-is-at-least-32-characters-long';
+
+export enum HttpErrorName {
+  BadRequest = 'Bad Request',
+  Unauthorized = 'Unauthorized',
+  Forbidden = 'Forbidden',
+  NotFound = 'Not Found',
+  Conflict = 'Conflict',
+  PayloadTooLarge = 'Payload Too Large',
+  TooManyRequests = 'Too Many Requests',
+  InternalServerError = 'Internal Server Error',
+}
 
 export enum ProbeRoute {
   Undecorated = 'probe',
@@ -37,11 +48,16 @@ export const path = {
   docs: `/${RoutePrefix.Docs}`,
 };
 
-type TestAppOptions = { throttling?: boolean; nodeEnv?: NodeEnv };
+type TestAppOptions = {
+  throttling?: boolean;
+  nodeEnv?: NodeEnv;
+  trustProxyHops?: number;
+};
 
 export const createTestApp = async ({
   throttling = false,
   nodeEnv = NodeEnv.Test,
+  trustProxyHops = 0,
 }: TestAppOptions = {}) => {
   const mongo = await MongoMemoryServer.create();
   Object.assign(process.env, {
@@ -49,7 +65,8 @@ export const createTestApp = async ({
     MONGODB_URI: mongo.getUri(),
     JWT_ACCESS_SECRET: JWT_SECRET,
     APP_ORIGIN,
-    TRUST_PROXY_HOPS: '1',
+    TRUST_PROXY_HOPS: String(trustProxyHops),
+    LOG_LEVEL: LogLevel.Silent,
   });
   const { AppModule } = await import('../src/app.module.js');
   const { configureApp } = await import('../src/app.setup.js');
@@ -71,14 +88,10 @@ export const createTestApp = async ({
   );
   await app.init();
 
-  const users = app.get<Model<User>>(getModelToken(User.name));
-  const sessions = app.get<Model<Session>>(getModelToken(Session.name));
-  await Promise.all([users.init(), sessions.init()]);
-
   return {
     app,
-    users,
-    sessions,
+    users: app.get<Model<User>>(getModelToken(User.name)),
+    sessions: app.get<Model<Session>>(getModelToken(Session.name)),
     http: () => request(app.getHttpServer() as App),
     close: async () => {
       await app.close();

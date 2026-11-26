@@ -1,8 +1,7 @@
 {
   "name": "backend",
   "version": "0.0.1",
-  "description": "",
-  "author": "",
+  "description": "NestJS authentication API with cookie sessions and refresh token rotation",
   "private": true,
   "license": "UNLICENSED",
   "type": "module",
@@ -52,7 +51,6 @@
     "oxlint": "^1.58.0",
     "oxlint-tsgolint": "^7.0.2001",
     "prettier": "^3.4.2",
-    "source-map-support": "^0.5.21",
     "supertest": "^7.0.0",
     "typescript": "^6.0.2",
     "vite": "^8.0.0",

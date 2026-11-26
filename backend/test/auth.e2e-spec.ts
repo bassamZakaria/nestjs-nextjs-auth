@@ -1,7 +1,7 @@
 import { Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import type { Response } from 'supertest';
-import { vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   ACCESS_TOKEN_AUDIENCE,
   ACCESS_TOKEN_ISSUER,
@@ -10,11 +10,13 @@ import { CookieName } from '../src/auth/auth-cookies.js';
 import { AuthErrorMessage } from '../src/auth/auth.service.js';
 import { PasswordRuleMessage } from '../src/auth/dto/credentials.js';
 import { PasswordHasher } from '../src/auth/password-hasher.service.js';
+import { ErrorMessage } from '../src/common/all-exceptions.filter.js';
 import { UsersErrorMessage, UsersService } from '../src/users/users.service.js';
 import {
   APP_ORIGIN,
   cookieValue,
   createTestApp,
+  HttpErrorName,
   path,
   setCookie,
   type TestApp,
@@ -64,8 +66,8 @@ const expectClearedCookies = (response: Response) => {
 
 const unauthorized = {
   statusCode: 401,
-  error: 'Unauthorized',
-  message: 'Unauthorized',
+  error: HttpErrorName.Unauthorized,
+  message: HttpErrorName.Unauthorized,
 };
 
 beforeAll(async () => {
@@ -172,7 +174,7 @@ describe('POST /api/auth/signup', () => {
     expect(response.status).toBe(400);
     expect(response.body).toEqual({
       statusCode: 400,
-      error: 'Bad Request',
+      error: HttpErrorName.BadRequest,
       message: expect.arrayContaining([message]),
     });
     expect(setCookie(response, CookieName.Access)).toBeUndefined();
@@ -199,7 +201,7 @@ describe('POST /api/auth/signup', () => {
     expect(response.status).toBe(409);
     expect(response.body).toEqual({
       statusCode: 409,
-      error: 'Conflict',
+      error: HttpErrorName.Conflict,
       message: UsersErrorMessage.EmailTaken,
     });
   });
@@ -251,7 +253,7 @@ describe('POST /api/auth/signin', () => {
 
     const expected = {
       statusCode: 401,
-      error: 'Unauthorized',
+      error: HttpErrorName.Unauthorized,
       message: AuthErrorMessage.InvalidCredentials,
     };
     expect(wrongPassword.status).toBe(401);
@@ -278,6 +280,17 @@ describe('POST /api/auth/signin', () => {
 
     expect(response.status).toBe(400);
     expect(response.body.statusCode).toBe(400);
+  });
+
+  it('rejects a malformed email with 400', async () => {
+    const response = await signIn('not-an-email');
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({
+      statusCode: 400,
+      error: HttpErrorName.BadRequest,
+      message: expect.arrayContaining(['email must be an email']),
+    });
   });
 
   it('rejects an empty password with 400 and skips the complexity rules', async () => {
@@ -494,6 +507,24 @@ describe('POST /api/auth/refresh', () => {
   });
 });
 
+describe('a forged secret on a real session id', () => {
+  it('leaves the session intact through logout and refresh', async () => {
+    const tokens = tokensOf(await signUp());
+    const [sessionId, secret] = tokens.refresh.split('.');
+    const forged = `${sessionId}.${secret.startsWith('a') ? 'b' : 'a'}${secret.slice(1)}`;
+
+    await t
+      .http()
+      .post(path.logout)
+      .set('Cookie', `${CookieName.Refresh}=${forged}`)
+      .expect(204);
+    await refreshWith(forged).expect(401);
+
+    expect(await t.sessions.countDocuments({ _id: sessionId })).toBe(1);
+    await refreshWith(tokens.refresh).expect(200);
+  });
+});
+
 describe('POST /api/auth/logout', () => {
   it('revokes the session, clears both cookies and is idempotent', async () => {
     const tokens = tokensOf(await signUp());
@@ -533,7 +564,7 @@ describe('cross-cutting behaviour', () => {
     expect(response.status).toBe(403);
     expect(response.body).toEqual({
       statusCode: 403,
-      error: 'Forbidden',
+      error: HttpErrorName.Forbidden,
       message: expect.any(String),
     });
   });
@@ -557,7 +588,7 @@ describe('cross-cutting behaviour', () => {
     expect(response.status).toBe(400);
     expect(response.body).toEqual({
       statusCode: 400,
-      error: 'Bad Request',
+      error: HttpErrorName.BadRequest,
       message: expect.any(String),
     });
   });
@@ -576,12 +607,26 @@ describe('cross-cutting behaviour', () => {
     expect(response.status).toBe(500);
     expect(response.body).toEqual({
       statusCode: 500,
-      error: 'Internal Server Error',
-      message: 'Internal server error',
+      error: HttpErrorName.InternalServerError,
+      message: ErrorMessage.InternalServerError,
     });
     expect(response.text).not.toContain(marker);
     expect(logError).toHaveBeenCalledWith(failure);
     logError.mockRestore();
+  });
+
+  it('answers an oversized body with 413 in the error contract', async () => {
+    const response = await t
+      .http()
+      .post(path.signIn)
+      .send({ email: 'a@example.com', password: 'x'.repeat(200_000) });
+
+    expect(response.status).toBe(413);
+    expect(response.body).toEqual({
+      statusCode: 413,
+      error: HttpErrorName.PayloadTooLarge,
+      message: expect.any(String),
+    });
   });
 
   it('rejects a JSON array body with 400', async () => {
@@ -594,7 +639,7 @@ describe('cross-cutting behaviour', () => {
     expect(response.status).toBe(404);
     expect(response.body).toEqual({
       statusCode: 404,
-      error: 'Not Found',
+      error: HttpErrorName.NotFound,
       message: expect.any(String),
     });
   });

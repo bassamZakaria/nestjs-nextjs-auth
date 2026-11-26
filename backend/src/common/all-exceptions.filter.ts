@@ -9,6 +9,10 @@ import {
 import type { Response } from 'express';
 import { STATUS_CODES } from 'node:http';
 
+export enum ErrorMessage {
+  InternalServerError = 'Internal server error',
+}
+
 type ErrorBody = {
   statusCode: number;
   error: string;
@@ -58,7 +62,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
     return {
       statusCode,
       error: statusText(statusCode),
-      message: 'Internal server error',
+      message: ErrorMessage.InternalServerError,
     };
   }
 }

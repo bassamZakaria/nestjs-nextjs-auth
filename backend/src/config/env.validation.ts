@@ -3,6 +3,7 @@ import { plainToInstance, Type } from 'class-transformer';
 import {
   IsEnum,
   IsInt,
+  IsNotEmpty,
   IsString,
   IsUrl,
   Matches,
@@ -18,9 +19,23 @@ export enum NodeEnv {
   Test = 'test',
 }
 
+export enum LogLevel {
+  Fatal = 'fatal',
+  Error = 'error',
+  Warn = 'warn',
+  Info = 'info',
+  Debug = 'debug',
+  Trace = 'trace',
+  Silent = 'silent',
+}
+
 export class EnvironmentVariables {
   @IsEnum(NodeEnv)
-  NODE_ENV: NodeEnv = NodeEnv.Development;
+  NODE_ENV: NodeEnv;
+
+  @IsString()
+  @IsNotEmpty()
+  HOST = '127.0.0.1';
 
   @Type(() => Number)
   @IsInt()
@@ -41,7 +56,10 @@ export class EnvironmentVariables {
   @Type(() => Number)
   @IsInt()
   @Min(0)
-  TRUST_PROXY_HOPS = 1;
+  TRUST_PROXY_HOPS = 0;
+
+  @IsEnum(LogLevel)
+  LOG_LEVEL = LogLevel.Info;
 }
 
 export const validateEnv = (config: Record<string, unknown>) => {
@@ -50,5 +68,6 @@ export const validateEnv = (config: Record<string, unknown>) => {
   if (errors.length > 0) {
     throw new Error(`Invalid environment: ${errors.toString()}`);
   }
+  env.APP_ORIGIN = new URL(env.APP_ORIGIN).origin;
   return env;
 };

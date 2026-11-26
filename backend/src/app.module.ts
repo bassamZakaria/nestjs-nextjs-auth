@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { HttpStatus, Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { MongooseModule } from '@nestjs/mongoose';
@@ -9,8 +9,9 @@ import { AuthModule } from './auth/auth.module.js';
 import { AllExceptionsFilter } from './common/all-exceptions.filter.js';
 import { OriginGuard } from './common/origin.guard.js';
 import { throttlerOptions } from './common/throttling.js';
+import type { Request } from 'express';
 import {
-  NodeEnv,
+  LogLevel,
   validateEnv,
   type EnvironmentVariables,
 } from './config/env.validation.js';
@@ -29,10 +30,12 @@ type Config = ConfigService<EnvironmentVariables, true>;
       inject: [ConfigService],
       useFactory: (config: Config) => ({
         pinoHttp: {
-          level:
-            config.get('NODE_ENV', { infer: true }) === NodeEnv.Test
-              ? 'silent'
-              : 'info',
+          level: config.get('LOG_LEVEL', { infer: true }),
+          customProps: (request) => ({ clientIp: (request as Request).ip }),
+          customLogLevel: (_request, response, error) =>
+            error || response.statusCode >= HttpStatus.INTERNAL_SERVER_ERROR
+              ? LogLevel.Error
+              : LogLevel.Info,
           redact: [
             'req.headers.cookie',
             'req.headers.authorization',

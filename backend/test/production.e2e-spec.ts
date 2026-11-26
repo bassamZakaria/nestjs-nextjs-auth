@@ -1,3 +1,4 @@
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { CookieName } from '../src/auth/auth-cookies.js';
 import { NodeEnv } from '../src/config/env.validation.js';
 import { createTestApp, path, setCookie, type TestApp } from './test-app.js';

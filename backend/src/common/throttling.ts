@@ -16,7 +16,7 @@ export const STRICT_LIMITS = {
   refresh: { [ThrottlerName.Default]: { limit: 30, ttl: MINUTE_MS } },
 };
 
-export const SIGN_IN_PER_EMAIL_LIMIT = { limit: 5, ttl: 15 * MINUTE_MS };
+export const SIGN_IN_PER_EMAIL_LIMIT = { limit: 10, ttl: 15 * MINUTE_MS };
 
 const bodyEmail = (request: Request): unknown =>
   (request.body as { email?: unknown } | undefined)?.email;

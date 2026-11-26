@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, type OnModuleInit } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Types, type Model } from 'mongoose';
 import { createHash, randomBytes } from 'node:crypto';
@@ -31,12 +31,16 @@ const parseRefreshToken = (token: string): ParsedRefreshToken | null => {
 };
 
 @Injectable()
-export class SessionsService {
+export class SessionsService implements OnModuleInit {
   private readonly logger = new Logger(SessionsService.name);
 
   constructor(
     @InjectModel(Session.name) private readonly sessions: Model<Session>,
   ) {}
+
+  async onModuleInit() {
+    await this.sessions.init();
+  }
 
   async create(userId: Types.ObjectId): Promise<IssuedSession> {
     const secret = newSecret();
@@ -60,7 +64,12 @@ export class SessionsService {
         tokenHash: parsed.tokenHash,
         expiresAt: { $gt: new Date() },
       },
-      { $set: { tokenHash: sha256(secret) } },
+      {
+        $set: {
+          tokenHash: sha256(secret),
+          previousTokenHash: parsed.tokenHash,
+        },
+      },
       { returnDocument: 'after' },
     );
     if (session) {
@@ -75,13 +84,20 @@ export class SessionsService {
     if (!parsed) {
       return;
     }
-    await this.sessions.deleteOne({ _id: parsed.sessionId });
+    const { sessionId, tokenHash } = parsed;
+    const { deletedCount } = await this.sessions.deleteOne({
+      _id: sessionId,
+      tokenHash,
+    });
+    if (deletedCount > 0) {
+      this.logger.log({ sessionId }, 'User logged out');
+    }
   }
 
   private async revokeIfReplayed({ sessionId, tokenHash }: ParsedRefreshToken) {
     const { deletedCount } = await this.sessions.deleteOne({
       _id: sessionId,
-      tokenHash: { $ne: tokenHash },
+      previousTokenHash: tokenHash,
     });
     if (deletedCount > 0) {
       this.logger.warn(

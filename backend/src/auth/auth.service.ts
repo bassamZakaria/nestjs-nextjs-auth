@@ -61,7 +61,6 @@ export class AuthService {
     if (refreshToken) {
       await this.sessions.revoke(refreshToken);
     }
-    this.logger.log('User logged out');
   }
 
   private async startSession(user: UserDocument): Promise<AuthResult> {

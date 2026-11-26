@@ -1,4 +1,8 @@
-import { ConflictException, Injectable } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  type OnModuleInit,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { isObjectIdOrHexString, mongo, type Model } from 'mongoose';
 import { User, type UserDocument } from './user.schema.js';
@@ -10,8 +14,12 @@ export enum UsersErrorMessage {
 }
 
 @Injectable()
-export class UsersService {
+export class UsersService implements OnModuleInit {
   constructor(@InjectModel(User.name) private readonly users: Model<User>) {}
+
+  async onModuleInit() {
+    await this.users.init();
+  }
 
   async create(user: User): Promise<UserDocument> {
     try {
@@ -31,7 +39,10 @@ export class UsersService {
     return this.users.findOne({ email }).select('+passwordHash').exec();
   }
 
-  findById(id: string) {
-    return isObjectIdOrHexString(id) ? this.users.findById(id).exec() : null;
+  async findById(id: string): Promise<UserDocument | null> {
+    if (!isObjectIdOrHexString(id)) {
+      return null;
+    }
+    return this.users.findById(id).exec();
   }
 }

@@ -1,9 +1,15 @@
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   SIGN_IN_PER_EMAIL_LIMIT,
   STRICT_LIMITS,
   ThrottlerName,
 } from '../src/common/throttling.js';
-import { createTestApp, path, type TestApp } from './test-app.js';
+import {
+  createTestApp,
+  HttpErrorName,
+  path,
+  type TestApp,
+} from './test-app.js';
 
 const PER_EMAIL_LIMIT = SIGN_IN_PER_EMAIL_LIMIT.limit;
 const PER_IP_SIGN_IN_LIMIT = STRICT_LIMITS.signIn[ThrottlerName.Default].limit;
@@ -18,7 +24,7 @@ const signInFrom = (ip: string, email: string) =>
     .send({ email, password: 'Wrong#password1' });
 
 beforeAll(async () => {
-  t = await createTestApp({ throttling: true });
+  t = await createTestApp({ throttling: true, trustProxyHops: 1 });
 });
 
 afterAll(async () => {
@@ -40,7 +46,7 @@ describe('sign-in throttling', () => {
     expect(blocked.status).toBe(429);
     expect(blocked.body).toEqual({
       statusCode: 429,
-      error: 'Too Many Requests',
+      error: HttpErrorName.TooManyRequests,
       message: expect.any(String),
     });
     await signInFrom('198.51.100.99', 'someone-else@example.com').expect(401);
