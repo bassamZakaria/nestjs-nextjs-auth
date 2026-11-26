@@ -381,7 +381,7 @@ const SCENARIOS = [
     steps: [
       req("x", "a", "POST /api/auth/logout", "A page on another site submits a hidden form to this app while you are signed in.", {}),
       self("x", "SameSite=Strict: no cookies", "Defence 1. The browser refuses to attach these cookies to a request that started on another site.", { f: "backend/src/auth/auth-cookies.ts:18" }),
-      self("a", "Origin guard: wrong Origin", "Defence 2. For any non-GET request, an `Origin` header that is not `APP_ORIGIN` is rejected before anything else runs.", { f: "backend/src/common/origin.guard.ts:28", err: true }),
+      self("a", "Origin guard: wrong Origin", "Defence 2. For a write such as this POST, an `Origin` header that is not `APP_ORIGIN` is rejected by the first guard, before rate limiting, auth or the handler.", { f: "backend/src/common/origin.guard.ts:28", err: true }),
       res("a", "x", "403 Cross-origin request rejected", "", { err: true }),
     ],
     end: "Nothing changed. The cookies were never sent, and the Origin guard stopped the request before any handler ran.",
