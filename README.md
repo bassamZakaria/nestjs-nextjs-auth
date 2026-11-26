@@ -2,6 +2,8 @@
 
 Sign up, sign in and a protected page. NestJS + MongoDB + Next.js, all TypeScript.
 
+How AI was used to build it: [AI.md](AI.md).
+
 ## Run it
 
 One command, and only Docker is needed:
