@@ -25,6 +25,7 @@ I don't use AI as a one-shot code generator. I run Claude Code with a standing c
 - **Cookies or Bearer tokens.** The projects I work on send Bearer tokens issued by a managed identity provider, so I asked why this should differ and had the assistant compare the two. In those projects an external provider issues the tokens and the client SDK keeps them where scripts can read them. Here I own the server that issues them, so `HttpOnly` cookies are possible and safer. I kept cookies.
 - **Scope.** I asked for the code to stay small. Several review suggestions were turned down as not worth the code: a nonce-based CSP, rolling back a sign-up if the session insert fails, and extra tests for things already documented.
 - **Testing the token expiry.** I made the access-token lifetime an environment variable (`ACCESS_TOKEN_TTL_SECONDS`, 15 minutes by default) so the short-lived token and its silent refresh can be watched within a minute instead of waiting fifteen.
+- **Monorepo tooling.** I asked whether this should be a workspace monorepo (npm workspaces or Turborepo) with a shared package for the validation rules and types. We weighed it and I kept two plain folders: the two apps share about ten lines of constants, and a workspace would add a root config, a third package to build and more complex Docker and CI for that. I would add it once there is real shared code, such as an API client.
 
 ## Where the AI was wrong
 

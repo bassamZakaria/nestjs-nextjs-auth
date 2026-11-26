@@ -85,4 +85,5 @@ Checks, in either folder: `npm run lint && npm run typecheck && npm test && npm 
 - A copied access token keeps working after logout until it expires (at most 15 minutes).
 - Sign-up reveals whether an email is taken (`409`). Email verification closes this.
 - Rate-limit counters are in memory, so they are per instance and reset on restart. Behind the Next.js proxy the per-IP limits are shared by all users; only the per-email sign-in limit is per user.
+- The field rules are written twice, once in the API and once in the web app, and kept in sync by tests on each side. A monorepo workspace with a shared package was considered and left out: for two apps sharing about ten lines, the tooling would add more than it removes.
 - The Docker setup is for local review: it runs over plain HTTP and makes a new JWT secret on every start. Production needs TLS in front of Next.js, `NODE_ENV=production` and a fixed secret.
