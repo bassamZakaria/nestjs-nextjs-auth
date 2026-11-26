@@ -1,0 +1,533 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Auth flows, step by step</title>
+<style>
+  :root {
+    --surface: var(--card, #ffffff); --ink: var(--foreground, #1b1c20); --dim: var(--muted-foreground, #666873);
+    --line: var(--border, #d8d6cd); --act: var(--info, #2a5bd7); --err: var(--destructive, #c4352b);
+    --ok: var(--success, #1d7f47); --soft: var(--secondary, #eef1fb); --codebg: var(--code-background, #eef1fb);
+    --mono: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace); --rad: var(--radius, 10px);
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; color: var(--ink); font-size: 14px; line-height: 1.5; }
+  nav { margin-bottom: 12px; }
+  .grp { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 6px; }
+  .grp span { flex: none; width: 108px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--dim); }
+  nav button {
+    font: inherit; font-size: 13px; padding: 4px 10px; border: 1px solid var(--line); border-radius: 999px;
+    background: none; color: var(--ink); cursor: pointer;
+  }
+  nav button[aria-current="true"] { border-color: var(--act); background: var(--soft); font-weight: 600; }
+  nav button.bad::before { content: "✕ "; color: var(--err); }
+  nav button.good::before { content: "✓ "; color: var(--ok); }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--rad); }
+  .head { padding: 16px 16px 0; }
+  .head h2 { margin: 0; font-size: 17px; }
+  .head p { margin: 2px 0 0; color: var(--dim); }
+  .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+  .controls button, .controls select {
+    font: inherit; padding: 5px 12px; border-radius: 8px; border: 1px solid var(--line);
+    background: none; color: var(--ink); cursor: pointer;
+  }
+  .controls button:disabled { opacity: .45; cursor: default; }
+  .controls button.primary { background: var(--primary, #2a5bd7); border-color: var(--primary, #2a5bd7); color: var(--primary-foreground, #fff); font-weight: 600; min-width: 78px; }
+  .controls .count { margin-left: auto; color: var(--dim); font-variant-numeric: tabular-nums; }
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; padding: 8px 16px; color: var(--dim); font-size: 12.5px; border-bottom: 1px solid var(--line); }
+  .legend i { display: inline-block; width: 26px; height: 0; border-top: 2px solid var(--act); vertical-align: middle; margin-right: 6px; }
+  .legend i.res { border-top-style: dashed; }
+  .legend i.err { border-top-color: var(--err); }
+  .legend i.box { height: 12px; border: 1.5px solid var(--ink); border-radius: 4px; }
+  .diagram { overflow-x: auto; padding: 4px 8px 8px; }
+  svg { display: block; width: 100%; min-width: 620px; height: auto; }
+  .lane-box { fill: var(--soft); stroke: var(--line); }
+  .lane-name { fill: var(--ink); font-weight: 600; font-size: 13px; }
+  .lifeline { stroke: var(--line); stroke-width: 1.5; stroke-dasharray: 3 5; }
+  .step { cursor: pointer; }
+  .badge { fill: var(--surface); stroke: var(--line); }
+  .badge-n { fill: var(--dim); font-weight: 600; font-size: 11px; }
+  .future .badge-n { opacity: .45; }
+  .now .badge { fill: var(--c); stroke: var(--c); }
+  .now .badge-n { fill: var(--surface); }
+  .arrow { stroke: var(--c); stroke-width: 2; fill: none; }
+  .arrow.res { stroke-dasharray: 6 5; }
+  .tip { fill: var(--c); }
+  .lbl { fill: var(--c); font-family: var(--mono); font-size: 12px; paint-order: stroke; stroke: var(--surface); stroke-width: 5px; stroke-linejoin: round; }
+  .box { fill: var(--surface); stroke: var(--c); stroke-width: 1.5; }
+  .box-t { fill: var(--c); font-family: var(--mono); font-size: 12px; }
+  .past { opacity: .6; }
+  .dot { fill: var(--c); opacity: 0; }
+  .now .dot { animation: travel var(--dur) ease-in-out forwards; }
+  .now .arrow.req { stroke-dasharray: 1; stroke-dashoffset: 1; animation: draw var(--dur) ease-in-out forwards; }
+  .now .arrow.res { animation: fade var(--dur) both; }
+  .now .tip { animation: fade .15s var(--dur) both; }
+  .now .lbl, .now .box, .now .box-t { animation: fade .35s both; }
+  @keyframes travel { from { transform: translateX(0); opacity: 1; } 85% { opacity: 1; } to { transform: translateX(var(--dx)); opacity: 0; } }
+  @keyframes draw { to { stroke-dashoffset: 0; } }
+  @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+  .below { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 12px; margin-top: 12px; }
+  .panel { padding: 16px; min-height: 236px; }
+  .panel h3 { margin: 0 0 6px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--dim); }
+  .cap-title { font-family: var(--mono); font-weight: 600; margin: 0 0 6px; }
+  .cap-title.err { color: var(--err); }
+  .panel p { margin: 0 0 8px; }
+  code { font-family: var(--mono); font-size: 12.5px; background: var(--codebg); padding: 1px 5px; border-radius: 4px; }
+  .file { color: var(--dim); font-size: 13px; }
+  .result { margin-top: 10px; padding: 8px 10px; border-left: 3px solid var(--ok); background: var(--soft); border-radius: 0 6px 6px 0; }
+  .result.err { border-left-color: var(--err); }
+  table { width: 100%; border-collapse: collapse; }
+  td { padding: 6px 0; vertical-align: top; border-top: 1px solid var(--line); overflow-wrap: anywhere; }
+  tr:first-child td { border-top: 0; }
+  td:first-child { color: var(--dim); width: 40%; padding-right: 10px; }
+  td.changed { color: var(--act); font-weight: 600; animation: fade .5s both; }
+  @media (max-width: 560px) {
+    .grp span { width: 100%; }
+    .below { grid-template-columns: minmax(0, 1fr); }
+    .panel { min-height: 0; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .now .dot, .now .arrow.req, .now .arrow.res, .now .tip, .now .lbl, .now .box, .now .box-t, td.changed { animation: none; }
+    .now .arrow.req { stroke-dashoffset: 0; }
+  }
+  html { color-scheme: light dark; }
+  body { max-width: 860px; margin: 0 auto; padding: 24px 16px 40px; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--background, #f6f5f1); }
+  h1 { font-size: 22px; margin: 0 0 14px; }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --background: #111215; --card: #1a1c21; --foreground: #ececf1; --muted-foreground: #9b9daa; --border: #343741;
+      --info: #7ea4ff; --destructive: #ff7b6f; --success: #5fd08a; --secondary: #20263a; --code-background: #20263a;
+      --primary: #7ea4ff; --primary-foreground: #111215;
+    }
+  }
+</style>
+</head>
+<body>
+<h1>Auth flows, step by step</h1>
+<nav id="nav" aria-label="Cases"></nav>
+<section class="card">
+  <div class="head"><h2 id="title"></h2><p id="sub"></p></div>
+  <div class="controls">
+    <button id="restart" type="button">Restart</button>
+    <button id="back" type="button">Back</button>
+    <button id="play" type="button" class="primary">Play</button>
+    <button id="next" type="button">Next</button>
+    <label>Speed
+      <select id="speed">
+        <option value="3400">Slow</option>
+        <option value="2300" selected>Normal</option>
+        <option value="1300">Fast</option>
+      </select>
+    </label>
+    <span class="count" id="count"></span>
+  </div>
+  <div class="legend">
+    <span><i></i>request</span>
+    <span><i class="res"></i>response</span>
+    <span><i class="err"></i>rejected</span>
+    <span><i class="box"></i>work inside one place</span>
+  </div>
+  <div class="diagram" id="diagram"></div>
+</section>
+<div class="below">
+  <section class="card panel" aria-live="polite">
+    <h3>What is happening</h3>
+    <div id="caption"></div>
+  </section>
+  <section class="card panel">
+    <h3>State right now</h3>
+    <table id="state"></table>
+  </section>
+</div>
+<script>
+const B3 = [["b", "Browser"], ["a", "API (NestJS)"], ["m", "MongoDB"]];
+const req = (from, to, text, note, o = {}) => ({ k: "req", from, to, text, note, ...o });
+const res = (from, to, text, note, o = {}) => ({ k: "res", from, to, text, note, ...o });
+const self = (at, text, note, o = {}) => ({ k: "self", at, text, note, ...o });
+
+const KEYS = {
+  page: "Page shown", access: "Access cookie", refresh: "Refresh cookie",
+  row: "Session row in Mongo", thief: "Thief holds", lock: "Web Lock", count: "Attempt counter",
+};
+
+const GUARDS_PUBLIC = "Three global guards run in order. Origin guard: a write that carries an `Origin` header must match `APP_ORIGIN`. Rate limiter: counts this request. Auth guard: skipped, because the auth controller is marked `@Public()`.";
+
+const SCENARIOS = [
+  {
+    group: "Getting in", tone: "good", title: "Sign up",
+    sub: "A new account is created and signed in at once.",
+    lanes: B3, init: { page: "/signup", access: "none", refresh: "none", row: "none" },
+    steps: [
+      self("b", "zod checks the form", "react-hook-form runs `signUpSchema` on blur and on submit: valid email, name 3 to 100 characters, password 8 to 128 with a letter, a digit and a special character. A bad form never leaves the browser.", { f: "frontend/src/lib/schemas.ts" }),
+      req("b", "a", "POST /api/auth/signup", "Body: `{ email, name, password }`. The browser calls Next.js on port 3000, which forwards `/api/*` to NestJS. Same origin, so no CORS.", { f: "frontend/src/lib/api.ts:97" }),
+      self("a", "Origin ✓  Rate limit ✓  @Public", GUARDS_PUBLIC + " Sign-up allows 5 per minute.", { f: "backend/src/app.module.ts:57" }),
+      self("a", "ValidationPipe → SignUpDto ✓", "The same rules again on the server. This is the check that counts, because anyone can skip the browser. The email is trimmed and lowercased. Unknown fields and non-string values get a 400.", { f: "backend/src/auth/dto/sign-up.dto.ts" }),
+      self("a", "argon2id hash(password)", "Only the hash is ever stored. The salt is generated automatically and lives inside the hash string.", { f: "backend/src/auth/password-hasher.service.ts:20" }),
+      req("a", "m", "insert user", "The unique index on `email` is the final guard against two accounts with one address.", { f: "backend/src/users/users.service.ts:24" }),
+      req("a", "m", "insert session (hashes only)", "Two random 32-byte values are made: `family` and `secret`. Mongo stores only their SHA-256 hashes, plus an expiry 7 days ahead.", { f: "backend/src/auth/sessions.service.ts:57", s: { row: "S1 · tokenHash = sha256(secret1) · expires in 7 days" } }),
+      self("a", "sign JWT { sub: userId }", "HS256, issuer `auth-api`, audience `auth-web`, expires in 15 minutes (`ACCESS_TOKEN_TTL_SECONDS`). The payload holds only the user id.", { f: "backend/src/auth/auth.service.ts:75" }),
+      res("a", "b", "201 + Set-Cookie × 2", "Both tokens travel in `HttpOnly`, `SameSite=Strict` cookies, so page JavaScript can never read them. The body is `{ id, email, name }`.", { f: "backend/src/auth/auth-cookies.ts:36", s: { access: "JWT · valid 15 min", refresh: "S1.family.secret1" } }),
+      self("b", "router.replace('/')", "The form navigates to the protected page. See the case “Open the protected page”.", { f: "frontend/src/components/sign-up-form.tsx", s: { page: "/" } }),
+    ],
+    end: "Signed in. One user row, one session row, two cookies.",
+  },
+  {
+    group: "Getting in", tone: "good", title: "Sign in",
+    sub: "An existing user gets a new session.",
+    lanes: B3, init: { page: "/signin", access: "none", refresh: "none", row: "none" },
+    steps: [
+      req("b", "a", "POST /api/auth/signin", "Body: `{ email, password }`. zod has already checked the email format and that the password is not empty.", { f: "frontend/src/lib/api.ts:100" }),
+      self("a", "Origin ✓  Rate limit ✓  @Public", GUARDS_PUBLIC + " Sign-in has two counters: 10 per minute per connecting address, and 10 per 15 minutes per email. Behind the Next.js proxy all users share one address, so the per-email counter is the one that is truly per user.", { f: "backend/src/auth/throttling.ts:13" }),
+      self("a", "ValidationPipe → SignInDto ✓", "Only checks that the email is valid and the password is present. No complexity rules here: they would tell an attacker about the password policy for free.", { f: "backend/src/auth/dto/sign-in.dto.ts" }),
+      req("a", "m", "find user (+passwordHash)", "The hash is hidden by default (`select: false`). This is the one query that asks for it.", { f: "backend/src/users/users.service.ts:38" }),
+      self("a", "argon2 verify ✓", "The typed password is hashed with the stored salt and compared with the stored hash.", { f: "backend/src/auth/auth.service.ts:38" }),
+      req("a", "m", "insert session (hashes only)", "Every sign-in makes its own session row. Signing in on a second device makes a second row; the first one is untouched.", { f: "backend/src/auth/sessions.service.ts:57", s: { row: "S1 · tokenHash = sha256(secret1) · expires in 7 days" } }),
+      self("a", "sign JWT { sub: userId }", "The 15-minute access token.", { f: "backend/src/auth/auth.service.ts:75" }),
+      res("a", "b", "200 + Set-Cookie × 2", "The same two cookies as sign-up.", { f: "backend/src/auth/auth.controller.ts:116", s: { access: "JWT · valid 15 min", refresh: "S1.family.secret1" } }),
+      self("b", "router.replace('/')", "On to the protected page.", { f: "frontend/src/components/sign-in-form.tsx:36", s: { page: "/" } }),
+    ],
+    end: "Signed in on this browser only. Other devices need their own sign-in.",
+  },
+  {
+    group: "Getting in", tone: "good", title: "Open the protected page",
+    sub: "A normal request with a valid access token.",
+    lanes: B3, init: { page: "/ (Loading…)", access: "JWT · valid", refresh: "S1.family.secret1", row: "S1 · tokenHash = sha256(secret1)" },
+    steps: [
+      self("b", "AppHome mounts, shows Loading…", "Nothing protected is rendered until the API has answered.", { f: "frontend/src/components/app-home.tsx:30" }),
+      req("b", "a", "GET /api/users/me", "The browser attaches both cookies by itself. The frontend code never touches a token.", { f: "frontend/src/lib/api.ts:106" }),
+      self("a", "AuthGuard: verify JWT ✓", "Checks the signature, that the algorithm is HS256, the issuer, the audience and the expiry. No database call. It then puts `{ sub }` on `request.user`.", { f: "backend/src/auth/auth.guard.ts:46" }),
+      req("a", "m", "findById(sub)", "The user id comes from the verified token, never from the request, so nobody can ask for someone else's record.", { f: "backend/src/users/users.controller.ts:19" }),
+      res("a", "b", "200 { id, email, name }", "Only these three fields are ever returned.", { f: "backend/src/users/user-response.dto.ts" }),
+      self("b", "Welcome to the application.", "The page renders, with the Log out button.", { f: "frontend/src/components/app-home.tsx", s: { page: "/ (Welcome)" } }),
+    ],
+    end: "This is the path of every protected request while the access token is valid.",
+  },
+  {
+    group: "Token lifecycle", tone: "good", title: "Access token expired → silent refresh",
+    sub: "After 15 minutes the browser gets a new access token without the user noticing.",
+    lanes: B3, init: { page: "/ (Welcome)", access: "expired · browser dropped it", refresh: "S1.family.secret1", row: "S1 · tokenHash = sha256(secret1)" },
+    steps: [
+      req("b", "a", "GET /api/users/me", "The access cookie reached its Max-Age, so the browser no longer sends it. Only the refresh cookie goes along.", { f: "frontend/src/lib/api.ts:88" }),
+      self("a", "AuthGuard: no access token", "A missing token and an expired token are treated the same way.", { f: "backend/src/auth/auth.guard.ts:42", err: true }),
+      res("a", "b", "401 Unauthorized", "The frontend client sees a 401 on a normal route and decides to refresh.", { f: "frontend/src/lib/api.ts:90", err: true }),
+      self("b", "take lock, start one refresh", "One refresh per tab (`refreshInFlight`), and one at a time across tabs (Web Lock `auth-refresh`).", { f: "frontend/src/lib/api.ts:77" }),
+      req("b", "a", "POST /api/auth/refresh", "The refresh cookie `S1.family.secret1` is attached.", { f: "backend/src/auth/auth.controller.ts:75" }),
+      req("a", "m", "swap secret1 → secret2 (atomic)", "One `findOneAndUpdate` that matches session id, family hash, secret hash and “not expired”, and writes the new secret hash. Being a single operation, two requests cannot both win.", { f: "backend/src/auth/sessions.service.ts:76", s: { row: "S1 · tokenHash = sha256(secret2)" } }),
+      self("a", "sign new JWT", "The user is reloaded first, so a deleted account cannot be refreshed.", { f: "backend/src/auth/auth.service.ts:49" }),
+      res("a", "b", "200 + Set-Cookie × 2", "A new access token and a new refresh token. The session id and family stay the same; only the secret changed. The session's 7-day expiry is not extended.", { f: "backend/src/auth/auth-cookies.ts:36", s: { access: "new JWT · valid 15 min", refresh: "S1.family.secret2" } }),
+      req("b", "a", "GET /api/users/me (retry)", "The original request is sent again, once.", { f: "frontend/src/lib/api.ts:94" }),
+      res("a", "b", "200 { id, email, name }", "The page carries on as if nothing happened.", {}),
+    ],
+    end: "The old refresh token (secret1) is now dead. Using it again is treated as theft.",
+  },
+  {
+    group: "Token lifecycle", tone: "good", title: "Two tabs refresh at once",
+    sub: "Why the frontend uses a Web Lock.",
+    lanes: [["t1", "Tab A"], ["t2", "Tab B"], ["a", "API"], ["m", "MongoDB"]],
+    init: { refresh: "S1.family.secret1 (shared by both tabs)", row: "S1 · tokenHash = sha256(secret1)", lock: "free" },
+    steps: [
+      res("a", "t1", "401 (access expired)", "Both tabs had a request fail at the same moment.", { err: true }),
+      res("a", "t2", "401 (access expired)", "Tabs in one browser share the same cookies, so they share one session.", { err: true }),
+      self("t1", "takes the lock", "`navigator.locks.request('auth-refresh', …)`. Only one holder at a time, across all tabs of this origin.", { f: "frontend/src/lib/api.ts:70", s: { lock: "held by Tab A" } }),
+      self("t2", "waits for the lock", "Tab B is queued by the browser. It sends nothing yet.", {}),
+      req("t1", "a", "refresh with secret1", "Tab A refreshes.", {}),
+      req("a", "m", "swap secret1 → secret2", "Normal rotation.", { f: "backend/src/auth/sessions.service.ts:76", s: { row: "S1 · tokenHash = sha256(secret2)" } }),
+      res("a", "t1", "200 + new cookies", "The cookie jar is shared, so Tab B now holds secret2 as well.", { s: { refresh: "S1.family.secret2 (shared by both tabs)" } }),
+      self("t1", "releases lock, retries ✓", "Tab A's original request succeeds.", { s: { lock: "held by Tab B" } }),
+      req("t2", "a", "refresh with secret2", "Tab B's turn. The browser attaches the current cookie, which is already secret2, so this is a valid refresh.", {}),
+      req("a", "m", "swap secret2 → secret3", "A second, harmless rotation.", { s: { row: "S1 · tokenHash = sha256(secret3)" } }),
+      res("a", "t2", "200 + new cookies", "Tab B retries its request and succeeds.", { s: { refresh: "S1.family.secret3 (shared by both tabs)", lock: "free" } }),
+    ],
+    end: "Without the lock, Tab B would have sent secret1 after it was rotated. The API would see a replay and kill the session.",
+  },
+  {
+    group: "Token lifecycle", tone: "good", title: "Log out",
+    sub: "Ends this one session on the server and clears the cookies.",
+    lanes: B3, init: { page: "/ (Welcome)", access: "JWT · valid", refresh: "S1.family.secret3", row: "S1 · tokenHash = sha256(secret3)" },
+    steps: [
+      self("b", "click Log out, take lock", "Logout runs inside the same Web Lock as refresh, so the two cannot race in browsers that support Web Locks.", { f: "frontend/src/lib/api.ts:103" }),
+      req("b", "a", "POST /api/auth/logout", "The refresh cookie is attached. The route is public: it must work even when the access token has expired.", { f: "backend/src/auth/auth.controller.ts:93" }),
+      req("a", "m", "deleteOne({ _id, familyHash })", "Matches on session id and family, not on the secret. So even an out-of-date token can end the session, which matters if a thief has already rotated it.", { f: "backend/src/auth/sessions.service.ts:105", s: { row: "deleted" } }),
+      res("a", "b", "204 + clear both cookies", "The cookies are cleared with the same flags they were set with.", { f: "backend/src/auth/auth-cookies.ts:54", s: { access: "none", refresh: "none" } }),
+      self("b", "router.replace('/signin')", "Back to the sign-in page.", { f: "frontend/src/components/app-home.tsx", s: { page: "/signin" } }),
+    ],
+    end: "Only this session ended; other devices stay signed in. A copy of the access token would still work until it expires (at most 15 minutes), the usual JWT trade-off.",
+  },
+  {
+    group: "Token lifecycle", tone: "bad", title: "Session expired after 7 days",
+    sub: "The refresh token has a fixed lifetime that rotation never extends.",
+    lanes: B3, init: { page: "/ (Welcome)", access: "expired", refresh: "expired · browser dropped it", row: "S1 · expiresAt in the past" },
+    steps: [
+      req("b", "a", "GET /api/users/me", "No cookies are left to send.", {}),
+      res("a", "b", "401 Unauthorized", "The auth guard finds no access token.", { f: "backend/src/auth/auth.guard.ts:42", err: true }),
+      req("b", "a", "POST /api/auth/refresh", "The client still tries one refresh.", { f: "frontend/src/lib/api.ts:93" }),
+      self("a", "no valid session", "With no cookie, nothing is looked up. Even if the old token were sent, the query requires `expiresAt > now` and fails. It is not flagged as theft, because the secret is the current one.", { f: "backend/src/auth/sessions.service.ts:84", err: true }),
+      res("a", "b", "401 + clear both cookies", "The refresh's 401 is passed up to the page.", { f: "backend/src/auth/auth.controller.ts:86", err: true }),
+      self("b", "router.replace('/signin')", "The page sees a 401 and sends the user to sign in.", { f: "frontend/src/components/app-home.tsx:34", s: { page: "/signin" } }),
+      self("m", "TTL index deletes the row", "Mongo removes expired session rows by itself, using the TTL index on `expiresAt`.", { f: "backend/src/auth/session.schema.ts:17", s: { row: "deleted by Mongo" } }),
+    ],
+    end: "The user signs in again. A stolen refresh token cannot keep a session alive past 7 days.",
+  },
+  {
+    group: "Rejections", tone: "bad", title: "Not signed in, opens /",
+    sub: "The protected page never shows its content.",
+    lanes: B3, init: { page: "/ (Loading…)", access: "none", refresh: "none", row: "none" },
+    steps: [
+      req("b", "a", "GET /api/users/me", "No cookies.", {}),
+      self("a", "AuthGuard: no access token", "Every route is protected unless marked `@Public()`.", { f: "backend/src/auth/auth.guard.ts:42", err: true }),
+      res("a", "b", "401 Unauthorized", "", { err: true }),
+      req("b", "a", "POST /api/auth/refresh", "One refresh attempt, with no cookie.", { f: "frontend/src/lib/api.ts:93" }),
+      res("a", "b", "401 Unauthorized", "Refresh is never retried after its own 401, so there is no loop.", { f: "frontend/src/lib/api.ts:28", err: true }),
+      self("b", "router.replace('/signin')", "Only “Loading…” was ever on screen.", { f: "frontend/src/components/app-home.tsx:34", s: { page: "/signin" } }),
+    ],
+    end: "Redirected to sign-in with no flash of protected content.",
+  },
+  {
+    group: "Rejections", tone: "bad", title: "Wrong password or unknown email",
+    sub: "Both fail in the same way, on purpose.",
+    lanes: B3, init: { page: "/signin", access: "none", refresh: "none", row: "none" },
+    steps: [
+      req("b", "a", "POST /api/auth/signin", "An email that has no account.", {}),
+      self("a", "guards ✓  validation ✓", "The request is well-formed, so it reaches the service.", {}),
+      req("a", "m", "find user by email", "", { f: "backend/src/users/users.service.ts:38" }),
+      res("m", "a", "null (no such user)", "", { err: true }),
+      self("a", "verify against a dummy hash", "A real argon2 verify still runs, against a hash made at start-up. So “unknown email” takes as long as “wrong password”, and timing does not reveal which emails exist.", { f: "backend/src/auth/password-hasher.service.ts:28" }),
+      res("a", "b", "401 Invalid email or password", "The exact same response as a wrong password for a real account.", { f: "backend/src/auth/auth.service.ts:43", err: true }),
+      self("b", "form shows the message", "No cookies were set and no session was created.", { f: "frontend/src/lib/form-error.ts:4" }),
+    ],
+    end: "An attacker cannot use sign-in to learn which emails are registered.",
+  },
+  {
+    group: "Rejections", tone: "bad", title: "Sign up with a taken email",
+    sub: "The database index is what decides.",
+    lanes: B3, init: { page: "/signup", access: "none", refresh: "none", row: "none" },
+    steps: [
+      req("b", "a", "POST /api/auth/signup", "A valid form, but the email already has an account.", {}),
+      self("a", "guards ✓  validation ✓  hash", "Nothing here knows the email is taken. There is no “check first” query, which would be a race.", {}),
+      req("a", "m", "insert user", "", { f: "backend/src/users/users.service.ts:24" }),
+      res("m", "a", "E11000 duplicate key", "The unique index refuses the insert. Two simultaneous sign-ups with one email: exactly one wins.", { err: true }),
+      self("a", "map to 409 Conflict", "The Mongo error is turned into a clean HTTP error.", { f: "backend/src/users/users.service.ts:28" }),
+      res("a", "b", "409 Email is already registered", "", { err: true }),
+      self("b", "error on the email field", "The message appears under the email input and focus moves there.", { f: "frontend/src/components/sign-up-form.tsx" }),
+    ],
+    end: "Known limitation: this reveals that the email is registered. Email verification (on the roadmap) closes it.",
+  },
+  {
+    group: "Rejections", tone: "bad", title: "Invalid or malicious body",
+    sub: "Someone skips the browser and calls the API directly.",
+    lanes: [["x", "Client (curl)"], ["a", "API (NestJS)"], ["m", "MongoDB"]],
+    init: { row: "untouched" },
+    steps: [
+      req("x", "a", "POST /api/auth/signin", "Body: `{ \"email\": { \"$ne\": null }, \"password\": \"x\", \"role\": \"admin\" }`. A classic NoSQL operator injection plus an extra field.", {}),
+      self("a", "ValidationPipe rejects", "`@IsString()` fails because the email is an object, not text. `forbidNonWhitelisted` rejects the unknown `role` field.", { f: "backend/src/app.setup.ts:37", err: true }),
+      res("a", "x", "400 Bad Request (JSON error)", "Body: `{ statusCode, error, message }`. Every error has this same shape, produced by one exception filter.", { f: "backend/src/common/all-exceptions.filter.ts", err: true }),
+    ],
+    end: "The handler never ran and Mongo was never queried.",
+  },
+  {
+    group: "Rejections", tone: "bad", title: "Too many attempts",
+    sub: "The rate limiter answers before any real work is done.",
+    lanes: B3, init: { count: "10 of 10 for this email (15 min window)" },
+    steps: [
+      req("b", "a", "POST /api/auth/signin  (try 11)", "The eleventh try for the same email inside 15 minutes.", {}),
+      self("a", "ThrottlerGuard: over the limit", "The counter is keyed on the email in the body, so changing IP address does not help. A second counter allows 10 per minute per connecting address, which behind the Next.js proxy is shared by all users.", { f: "backend/src/auth/throttling.ts:29", err: true, s: { count: "11 of 10 → blocked" } }),
+      res("a", "b", "429 Too many requests", "No password check and no database query happened.", { err: true }),
+      self("b", "form: too many attempts", "The form asks the user to wait.", { f: "frontend/src/lib/form-error.ts:4" }),
+    ],
+    end: "Counters are kept in memory: fine for one instance, Redis is needed for more.",
+  },
+  {
+    group: "Attacks", tone: "bad", title: "Stolen refresh token is replayed",
+    sub: "Rotation turns a copied token into an alarm.",
+    lanes: [["t", "Thief"], ["b", "You (browser)"], ["a", "API"], ["m", "MongoDB"]],
+    init: { thief: "a copy of S1.family.secret1", refresh: "S1.family.secret1", row: "S1 · tokenHash = sha256(secret1)" },
+    steps: [
+      req("b", "a", "refresh with secret1", "Your browser refreshes first, as usual.", {}),
+      req("a", "m", "swap secret1 → secret2", "", { f: "backend/src/auth/sessions.service.ts:76", s: { row: "S1 · tokenHash = sha256(secret2)" } }),
+      res("a", "b", "200 + new cookies", "The thief's copy is now out of date.", { s: { refresh: "S1.family.secret2" } }),
+      req("t", "a", "refresh with secret1", "The thief uses the copied token.", { err: true }),
+      req("a", "m", "rotate → no match", "The stored hash is no longer sha256(secret1).", { f: "backend/src/auth/sessions.service.ts:76", err: true }),
+      req("a", "m", "deleteOne → 1 deleted", "Session id right, family right, secret not the current one. Only someone who has held a real token of this session, and so knows its family, can produce that. The session is deleted.", { f: "backend/src/auth/sessions.service.ts:85", err: true, s: { row: "deleted (theft detected)" } }),
+      res("a", "t", "401 + cookies cleared", "A warning is logged: “Refresh token reuse detected”.", { err: true, s: { thief: "a dead token" } }),
+      req("b", "a", "refresh with secret2", "Later, your own next refresh.", {}),
+      res("a", "b", "401 Unauthorized", "The session no longer exists.", { err: true, s: { refresh: "none" } }),
+      self("b", "router.replace('/signin')", "You sign in again and get a fresh session the thief knows nothing about.", { s: { page: "/signin" } }),
+    ],
+    end: "If the thief refreshes first, your next refresh is the replay, and the outcome is the same: the session dies and the thief can no longer refresh. The access token they already got works until it expires (at most 15 minutes).",
+  },
+  {
+    group: "Attacks", tone: "bad", title: "Forged token with a guessed session id",
+    sub: "Why the token has a “family” part.",
+    lanes: [["x", "Attacker"], ["a", "API (NestJS)"], ["m", "MongoDB"]],
+    init: { row: "S1 · familyHash = sha256(family) · tokenHash = sha256(secret5)" },
+    steps: [
+      req("x", "a", "POST /refresh  S1.fake.fake", "The attacker knows or guesses a session id (it is a Mongo ObjectId, not a secret) and invents the other two parts: 43 random characters each, written here as `fake`.", {}),
+      self("a", "shape check passes", "24 hex characters, then two 43-character parts. Anything else is dropped before the database.", { f: "backend/src/auth/sessions.service.ts:26" }),
+      req("a", "m", "rotate → no match", "The family hash is wrong.", { err: true }),
+      req("a", "m", "deleteOne → 0 deleted", "The theft rule also requires the real family, so a guess cannot trigger it.", { f: "backend/src/auth/sessions.service.ts:85", err: true }),
+      res("a", "x", "401 Unauthorized", "", { err: true }),
+      req("x", "a", "POST /logout  S1.fake.fake", "Next try: force the victim out.", {}),
+      req("a", "m", "deleteOne → 0 deleted", "Logout matches on session id and family hash.", { f: "backend/src/auth/sessions.service.ts:105", err: true }),
+      res("a", "x", "204 (nothing happened)", "Logout always answers 204, so it leaks nothing.", {}),
+    ],
+    end: "The victim's session is untouched. Knowing a session id is not enough to refresh it or end it.",
+  },
+  {
+    group: "Attacks", tone: "bad", title: "Request from another website (CSRF)",
+    sub: "Two independent defences.",
+    lanes: [["x", "evil.example page"], ["a", "API (NestJS)"], ["m", "MongoDB"]],
+    init: { access: "JWT · valid (not sent)", refresh: "S1.family.secret1 (not sent)", row: "S1 · unchanged" },
+    steps: [
+      req("x", "a", "POST /api/auth/logout", "A page on another site submits a hidden form to this app while you are signed in.", {}),
+      self("x", "SameSite=Strict: no cookies", "Defence 1. The browser refuses to attach these cookies to a request that started on another site.", { f: "backend/src/auth/auth-cookies.ts:18" }),
+      self("a", "Origin guard: wrong Origin", "Defence 2. For any non-GET request, an `Origin` header that is not `APP_ORIGIN` is rejected before anything else runs.", { f: "backend/src/common/origin.guard.ts:28", err: true }),
+      res("a", "x", "403 Cross-origin request rejected", "", { err: true }),
+    ],
+    end: "Nothing changed. The cookies were never sent, and the Origin guard stopped the request before any handler ran.",
+  },
+];
+
+const ROW = 52, TOP = 96, W = 720, MARGIN = 110;
+let si = 0, cur = 0, timer = null;
+const $ = (id) => document.getElementById(id);
+const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const rich = (t) => esc(t).replace(/`([^`]+)`/g, "<code>$1</code>");
+const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+function stateAt(sc, index) {
+  const state = { ...sc.init };
+  for (let i = 0; i <= index; i++) Object.assign(state, sc.steps[i].s);
+  return state;
+}
+
+function drawDiagram(sc) {
+  const n = sc.lanes.length;
+  const xs = {};
+  sc.lanes.forEach(([id], i) => { xs[id] = MARGIN + (i * (W - 2 * MARGIN)) / (n - 1); });
+  const H = TOP + sc.steps.length * ROW;
+  const dur = Math.min(0.75, Number($("speed").value) / 3200);
+  let out = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(sc.title)} sequence diagram" style="--dur:${dur}s">`;
+  for (const [id, name] of sc.lanes) {
+    const w = Math.max(120, name.length * 7.6 + 24);
+    out += `<line class="lifeline" x1="${xs[id]}" y1="52" x2="${xs[id]}" y2="${H - 8}"/>`;
+    out += `<rect class="lane-box" x="${xs[id] - w / 2}" y="14" width="${w}" height="36" rx="8"/>`;
+    out += `<text class="lane-name" x="${xs[id]}" y="37" text-anchor="middle">${esc(name)}</text>`;
+  }
+  sc.steps.forEach((st, i) => {
+    const y = TOP + i * ROW;
+    const when = i < cur ? "past" : i === cur ? "now" : "future";
+    const color = st.err ? "var(--err)" : st.k === "self" ? "var(--ink)" : "var(--act)";
+    out += `<g class="step ${when}" data-i="${i}" style="--c:${color}">`;
+    out += `<circle class="badge" cx="20" cy="${y}" r="11"/><text class="badge-n" x="20" y="${y + 4}" text-anchor="middle">${i + 1}</text>`;
+    if (when !== "future") {
+      if (st.k === "self") {
+        const w = Math.max(150, st.text.length * 7.3 + 28);
+        const x = Math.max(40, Math.min(W - 8 - w, xs[st.at] - w / 2));
+        out += `<rect class="box" x="${x}" y="${y - 16}" width="${w}" height="32" rx="7"/>`;
+        out += `<text class="box-t" x="${x + w / 2}" y="${y + 4}" text-anchor="middle">${esc(st.text)}</text>`;
+      } else {
+        const x1 = xs[st.from], x2 = xs[st.to], dir = Math.sign(x2 - x1);
+        out += `<line class="arrow ${st.k}" x1="${x1}" y1="${y}" x2="${x2 - dir * 9}" y2="${y}"${st.k === "req" ? ' pathLength="1"' : ""}/>`;
+        out += `<polygon class="tip" points="${x2},${y} ${x2 - dir * 11},${y - 5} ${x2 - dir * 11},${y + 5}"/>`;
+        out += `<text class="lbl" x="${(x1 + x2) / 2}" y="${y - 9}" text-anchor="middle">${esc(st.text)}</text>`;
+        if (when === "now") out += `<circle class="dot" cx="${x1}" cy="${y}" r="5.5" style="--dx:${x2 - x1}px"/>`;
+      }
+    }
+    out += "</g>";
+  });
+  $("diagram").innerHTML = out + "</svg>";
+}
+
+function render() {
+  const sc = SCENARIOS[si];
+  const st = sc.steps[cur];
+  const last = cur === sc.steps.length - 1;
+  $("title").textContent = sc.title;
+  $("sub").textContent = sc.sub;
+  $("count").textContent = `Step ${cur + 1} of ${sc.steps.length}`;
+  $("play").textContent = timer ? "Pause" : last ? "Replay" : "Play";
+  $("back").disabled = cur === 0;
+  $("next").disabled = last;
+  drawDiagram(sc);
+
+  let cap = `<p class="cap-title${st.err ? " err" : ""}">${cur + 1}. ${esc(st.text)}</p>`;
+  if (st.note) cap += `<p>${rich(st.note)}</p>`;
+  if (st.f) cap += `<p class="file">Code: <code>${esc(st.f)}</code></p>`;
+  if (last) cap += `<p class="result${sc.tone === "bad" ? " err" : ""}"><strong>Result:</strong> ${rich(sc.end)}</p>`;
+  $("caption").innerHTML = cap;
+
+  const now = stateAt(sc, cur);
+  const before = cur > 0 ? stateAt(sc, cur - 1) : sc.init;
+  $("state").innerHTML = Object.keys(now)
+    .map((key) => `<tr><td>${KEYS[key]}</td><td class="${now[key] !== before[key] ? "changed" : ""}">${esc(now[key])}</td></tr>`)
+    .join("");
+
+  document.querySelectorAll("nav button").forEach((button, i) => button.setAttribute("aria-current", String(i === si)));
+}
+
+function stop() { clearInterval(timer); timer = null; }
+
+function play() {
+  stop();
+  const sc = SCENARIOS[si];
+  if (cur === sc.steps.length - 1) cur = 0;
+  timer = setInterval(() => {
+    if (cur >= SCENARIOS[si].steps.length - 1) { stop(); render(); return; }
+    cur++;
+    render();
+  }, Number($("speed").value));
+  render();
+}
+
+function go(step) {
+  stop();
+  cur = Math.max(0, Math.min(SCENARIOS[si].steps.length - 1, step));
+  render();
+}
+
+function choose(index) {
+  si = index;
+  cur = 0;
+  if (reduced) { stop(); render(); } else play();
+}
+
+let row = null;
+SCENARIOS.forEach((sc, i) => {
+  if (!row || row.dataset.group !== sc.group) {
+    row = document.createElement("div");
+    row.className = "grp";
+    row.dataset.group = sc.group;
+    const label = document.createElement("span");
+    label.textContent = sc.group;
+    row.append(label);
+    $("nav").append(row);
+  }
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = sc.tone;
+  button.textContent = sc.title;
+  button.onclick = () => choose(i);
+  row.append(button);
+});
+
+$("play").onclick = () => (timer ? (stop(), render()) : play());
+$("next").onclick = () => go(cur + 1);
+$("back").onclick = () => go(cur - 1);
+$("restart").onclick = () => go(0);
+$("speed").onchange = () => (timer ? play() : render());
+$("diagram").onclick = (event) => {
+  const step = event.target.closest(".step");
+  if (step) go(Number(step.dataset.i));
+};
+document.addEventListener("keydown", (event) => {
+  if (event.target.tagName === "SELECT") return;
+  if (event.key === "ArrowRight") go(cur + 1);
+  if (event.key === "ArrowLeft") go(cur - 1);
+  if (event.key === " " && event.target.tagName !== "BUTTON") { event.preventDefault(); $("play").click(); }
+});
+
+choose(0);
+</script>
+</body>
+</html>

@@ -1,121 +1,87 @@
 # Auth module
 
-Sign up, sign in and a protected page — NestJS + MongoDB + Next.js, all TypeScript.
+Sign up, sign in and a protected page. NestJS + MongoDB + Next.js, all TypeScript.
 
-| | Stack |
-|---|---|
-| **Backend** | NestJS, Mongoose, argon2id, JWT, Swagger, pino, Vitest |
-| **Frontend** | Next.js (App Router), React Hook Form, zod, Tailwind, Vitest |
-| **Database** | MongoDB (via Docker Compose) |
-| **CI** | GitHub Actions — lint, typecheck, test, build |
+## Run it
 
-## Quick start
-
-Needs Node 22.22.3+, npm 10 and Docker.
+One command, and only Docker is needed:
 
 ```bash
-docker compose up -d                 # MongoDB
-
-cd backend                           # API → http://localhost:4000
-cp .env.example .env                 # then set JWT_ACCESS_SECRET (openssl rand -base64 48)
-npm ci && npm run start:dev
-
-cd frontend                          # Web → http://localhost:3000
-npm ci && npm run dev
+docker compose up --build
 ```
 
-Open **http://localhost:3000** (use `localhost`, not `127.0.0.1`).
-API docs (Swagger): **http://localhost:3000/api/docs**.
+Then open **http://localhost:3000** (use `localhost`, not `127.0.0.1`). API docs: http://localhost:3000/api/docs.
 
-Run all checks:
+The access token lasts 15 minutes. To watch it refresh silently after one minute instead:
 
 ```bash
-(cd backend  && npm run lint && npm run typecheck && npm run build && npm test)
-(cd frontend && npm run lint && npm run typecheck && npm test && npm run build)
+ACCESS_TOKEN_TTL_SECONDS=60 docker compose up --build
 ```
+
+In PowerShell: `$env:ACCESS_TOKEN_TTL_SECONDS=60; docker compose up --build`.
 
 ## What's built
 
-- [x] Sign-up form — email, name (3+ chars), strong password, validated live
+- [x] Sign-up form: email, name (3+ chars), strong password, validated live
 - [x] Sign-in form
-- [x] Protected application page with a logout button
-- [x] NestJS API with MongoDB; validation enforced server-side too
-- [x] Protected endpoint (`GET /api/users/me`)
-- [x] Short-lived access token + rotating refresh token, in `HttpOnly` cookies
-- [x] Refresh-token theft detection
+- [x] Protected page ("Welcome to the application.") with a logout button
+- [x] NestJS API with MongoDB; the same validation enforced server-side
+- [x] Protected endpoint: `GET /api/users/me`
+- [x] Short-lived access token + rotating refresh token in `HttpOnly` cookies, with theft detection
 - [x] Rate limiting, security headers, structured logging, global error handling
-- [x] Swagger API docs
-- [x] Tests (72 backend e2e, 45 frontend) and CI
+- [x] Swagger docs, 72 backend and 45 frontend tests, CI on GitHub Actions
 
-## Endpoints
+## How it works
 
-The browser only talks to Next.js, which proxies `/api/*` to the API — so everything is same-origin and there is no CORS.
+![Animated diagram: the access token expires and the browser refreshes it silently](docs/silent-refresh.svg)
+
+**[Step through all 15 flows →](https://bassamzakaria.github.io/nestjs-nextjs-auth/)** Sign-up, sign-in, refresh, logout, a stolen token, CSRF, rate limiting and more, each with the code location.
+
+- **Access token:** a 15-minute JWT. The API verifies it without a database call.
+- **Refresh token:** `sessionId.family.secret`. MongoDB stores only hashes. Each refresh swaps the secret; replaying an old one is treated as theft and ends the session.
+- **Cookies:** both tokens are `HttpOnly` and `SameSite=Strict`, so page scripts never see them. A write that carries an `Origin` header must match the app's own.
+- **Sessions:** one per sign-in. Logout deletes it on the server; it also ends 7 days after sign-in.
+- **Passwords:** argon2id. Sign-in gives the same error, in the same time, for a wrong password and an unknown email.
 
 | Endpoint | Auth | Purpose |
 |---|---|---|
 | `POST /api/auth/signup` | public | Create the account and sign in |
 | `POST /api/auth/signin` | public | Sign in |
 | `POST /api/auth/refresh` | refresh cookie | Rotate the session's tokens |
-| `POST /api/auth/logout` | refresh cookie | Revoke the session |
+| `POST /api/auth/logout` | refresh cookie | End the session |
 | `GET /api/users/me` | access cookie | The signed-in user (protected) |
 
-**Field rules** (enforced on both sides): valid email; name ≥ 3 chars; password ≥ 8 chars with a letter, a number and a special character.
+## Develop
 
-## How sessions work
+Needs Node 22.22.3+ and MongoDB on `localhost:27017`.
 
-- **Access token** — a 15-minute JWT (configurable) in an `HttpOnly` cookie. The browser auto-refreshes it on a `401`.
-- **Refresh token** — `sessionId.family.secret`; MongoDB stores only hashes. Each refresh rotates the secret; replaying an old one is treated as theft and kills the session.
-- **Cookies** — `HttpOnly` + `SameSite=Strict` always; `Secure` + `__Host-` prefix in production. Page scripts can never read the tokens.
-- **Logout / expiry** — logout deletes the session server-side; sessions also end 7 days after sign-in.
+```bash
+docker run -d -p 127.0.0.1:27017:27017 mongo:8
 
-**Security highlights:** argon2id password hashing · generic sign-in error with constant-time behaviour · deny-by-default auth guard · `Origin` check on writes · input validation that blocks NoSQL operator injection · secrets validated at boot · helmet + CSP headers · redacted logs.
+cd backend                           # API on :4000
+cp .env.example .env                 # then set JWT_ACCESS_SECRET (openssl rand -base64 48)
+npm ci && npm run start:dev
 
-## Configuration
+cd frontend                          # web on :3000, in a second terminal
+npm ci && npm run dev
+```
 
-`backend/.env` (see `.env.example`):
-
-| Variable | Default | Notes |
-|---|---|---|
-| `NODE_ENV` | required | `development` / `production` / `test` |
-| `MONGODB_URI` | required | |
-| `JWT_ACCESS_SECRET` | required | 32+ characters |
-| `APP_ORIGIN` | required | e.g. `http://localhost:3000` |
-| `ACCESS_TOKEN_TTL_SECONDS` | `900` | Set to `60` to watch the silent refresh during a demo |
-| `HOST` / `PORT` | `127.0.0.1` / `4000` | |
-| `TRUST_PROXY_HOPS` | `0` | Set `1` only behind a proxy that sets `X-Forwarded-For` |
-| `LOG_LEVEL` | `info` | |
-
-`frontend`: `API_URL` (default `http://localhost:4000`), read at build time.
-
-**In production:** terminate TLS at a reverse proxy in front of Next.js, set `NODE_ENV=production`, and keep the API reachable only from Next.js.
+Checks, in either folder: `npm run lint && npm run typecheck && npm test && npm run build`.
+Every setting is described in [`backend/.env.example`](backend/.env.example).
 
 ## Roadmap
 
-**Next up — Passwordless login.** Email magic link / one-time code as an alternative to passwords, reusing the same session and cookie machinery.
+**Next: passwordless login.** An email magic link or one-time code, reusing the same sessions and cookies.
 
-Then, in rough order:
-
-- [ ] Email verification on sign-up (also closes the "email is taken" disclosure)
+- [ ] Email verification on sign-up
 - [ ] Password reset
 - [ ] Multi-factor authentication (TOTP / passkeys)
-- [ ] "Sign out everywhere" and an active-sessions list
-- [ ] Redis-backed rate limiting and sessions for multi-instance deploys
+- [ ] "Sign out everywhere" and a list of active sessions
+- [ ] Redis-backed rate limiting, to run more than one API instance
 
 ## Known limitations
 
-- A copied access token stays valid until it expires (≤ 15 min) after logout — the usual stateless-JWT trade-off.
-- Sign-up reveals whether an email is taken (`409`); closed by email verification above.
-- Rate-limit counters are in memory — one instance only until Redis is added.
-- Password composition rules come from the task; modern guidance prefers length + breached-password checks.
-
-## Layout
-
-```
-backend/src/auth     sign-up, sign-in, refresh, logout, sessions, guard, cookies, throttling
-backend/src/users    user schema, GET /users/me
-backend/src/common   exception filter, Origin guard, routes
-backend/src/config   environment validation
-frontend/src/app     pages: /, /signin, /signup
-frontend/src/components   forms, fields, password checklist, protected page
-frontend/src/lib     API client, zod schemas, routes, messages
-```
+- A copied access token keeps working after logout until it expires (at most 15 minutes).
+- Sign-up reveals whether an email is taken (`409`). Email verification closes this.
+- Rate-limit counters are in memory, so they are per instance and reset on restart. Behind the Next.js proxy the per-IP limits are shared by all users; only the per-email sign-in limit is per user.
+- The Docker setup is for local review: it runs over plain HTTP and makes a new JWT secret on every start. Production needs TLS in front of Next.js, `NODE_ENV=production` and a fixed secret.

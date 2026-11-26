@@ -1,10 +1,32 @@
 services:
   mongo:
     image: mongo:8
-    ports:
-      - "127.0.0.1:27017:27017"
     volumes:
       - mongo-data:/data/db
+
+  backend:
+    build: ./backend
+    depends_on:
+      - mongo
+    environment:
+      NODE_ENV: development
+      HOST: 0.0.0.0
+      MONGODB_URI: mongodb://mongo:27017/auth
+      APP_ORIGIN: http://localhost:3000
+      ACCESS_TOKEN_TTL_SECONDS: ${ACCESS_TOKEN_TTL_SECONDS:-900}
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-}
+    # shortcut: with no JWT_ACCESS_SECRET a random one is made on every start, so a restart expires all access tokens; set a fixed secret for a real deploy
+    command:
+      - sh
+      - -c
+      - export JWT_ACCESS_SECRET="$${JWT_ACCESS_SECRET:-$$(node -p 'require("crypto").randomBytes(48).toString("base64")')}" && exec node dist/main.js
+
+  frontend:
+    build: ./frontend
+    depends_on:
+      - backend
+    ports:
+      - "127.0.0.1:3000:3000"
 
 volumes:
   mongo-data:
