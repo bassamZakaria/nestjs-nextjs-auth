@@ -13,7 +13,7 @@ See [AI.md](AI.md) for how AI assistance was used.
 
 ## Run it locally
 
-Requirements: Node 22.22.3 or newer, npm 10 and Docker.
+Requirements: Node 22.22.3+, 24.15+ or 26+, npm 10 and Docker.
 
 ```bash
 # 1. MongoDB
@@ -57,11 +57,11 @@ The browser only talks to the Next.js origin. Next.js rewrites `/api/*` to the N
 | `POST /api/auth/logout` | refresh cookie | Revoke the session |
 | `GET /api/users/me` | access cookie | Protected: the signed-in user |
 
-Field rules are enforced on both sides with the same regular expressions: a valid email; a name of at least 3 characters; a password of at least 8 characters with a letter, a number and a special character (anything that is not a letter, digit or whitespace).
+Field rules are enforced on both sides: a valid email; a name of at least 3 characters; a password of at least 8 characters with a letter, a number and a special character (anything that is not a letter, digit or whitespace). The name and password rules use the same regular expressions on both sides; email is validated by zod on the client and class-validator on the server, which agree on ordinary addresses.
 
 ### Session design
 
-- **Access token:** a JWT (HS256, 15 minutes) carrying the user id and session id. Verification pins the algorithm and checks issuer, audience and expiry.
+- **Access token:** a JWT (HS256, 15 minutes) carrying the user id. Verification pins the algorithm and checks issuer, audience and expiry.
 - **Refresh token:** an opaque `<sessionId>.<family>.<secret>` value. The family is fixed for the life of the session; the secret changes on every refresh. MongoDB stores only SHA-256 hashes of both.
 - **Cookies:** both tokens live in `HttpOnly`, `SameSite=Strict` cookies, so page scripts can never read them. In production they are also `Secure` and use the `__Host-` name prefix.
 - **Rotation:** every refresh swaps the stored secret hash in one atomic update and issues a new refresh token. Presenting an older secret from the same family is treated as theft and revokes the session. A guessed session id without the family does nothing.
@@ -120,9 +120,9 @@ Field rules are enforced on both sides with the same regular expressions: a vali
 ## Project layout
 
 ```
-backend/src/auth      sign-up, sign-in, refresh, logout, sessions, guard, cookies
+backend/src/auth      sign-up, sign-in, refresh, logout, sessions, guard, cookies, throttling
 backend/src/users     user schema, GET /users/me
-backend/src/common    exception filter, Origin guard, throttling, routes
+backend/src/common    exception filter, Origin guard, routes
 backend/src/config    environment validation
 backend/test          end-to-end tests
 frontend/src/app      pages: /, /signin, /signup

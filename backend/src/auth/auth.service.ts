@@ -72,7 +72,7 @@ export class AuthService {
     user: UserDocument,
     { session, refreshToken }: IssuedSession,
   ): Promise<IssuedTokens> {
-    const payload: AccessTokenPayload = { sub: user.id, sid: session.id };
+    const payload: AccessTokenPayload = { sub: user.id };
     return {
       accessToken: await this.jwt.signAsync(payload),
       refreshToken,
