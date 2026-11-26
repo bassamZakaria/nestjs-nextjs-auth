@@ -5,12 +5,12 @@ type ButtonProps = ComponentProps<"button"> & {
   pendingLabel: string;
 };
 
-export function Button({ pending, pendingLabel, children, disabled, ...rest }: ButtonProps) {
+export function Button({ pending, pendingLabel, children, ...rest }: ButtonProps) {
   return (
     <button
       {...rest}
-      disabled={disabled || pending}
-      className="min-h-11 w-full rounded-md bg-accent px-4 font-semibold text-on-accent transition-colors hover:bg-accent-strong disabled:cursor-not-allowed disabled:opacity-70"
+      aria-disabled={pending || undefined}
+      className="min-h-11 w-full rounded-md bg-accent px-4 font-semibold text-on-accent transition-colors hover:bg-accent-strong aria-disabled:cursor-not-allowed aria-disabled:opacity-70"
     >
       {pending ? pendingLabel : children}
     </button>

@@ -13,9 +13,9 @@ export enum PasswordRule {
   Special = "At least one special character",
 }
 
-export const LETTER_PATTERN = /\p{L}/u;
-export const DIGIT_PATTERN = /\d/;
-export const SPECIAL_PATTERN = /[^\p{L}\p{N}\s]/u;
+const LETTER_PATTERN = /\p{L}/u;
+const DIGIT_PATTERN = /\d/;
+const SPECIAL_PATTERN = /[^\p{L}\p{N}\s]/u;
 
 const MIN_PASSWORD_LENGTH = 8;
 const MAX_PASSWORD_LENGTH = 128;
@@ -24,7 +24,7 @@ export const PASSWORD_CHECKS: ReadonlyArray<{
   rule: PasswordRule;
   test: (value: string) => boolean;
 }> = [
-  { rule: PasswordRule.Length, test: (v) => v.length >= MIN_PASSWORD_LENGTH },
+  { rule: PasswordRule.Length, test: (v) => [...v].length >= MIN_PASSWORD_LENGTH },
   { rule: PasswordRule.Letter, test: (v) => LETTER_PATTERN.test(v) },
   { rule: PasswordRule.Digit, test: (v) => DIGIT_PATTERN.test(v) },
   { rule: PasswordRule.Special, test: (v) => SPECIAL_PATTERN.test(v) },

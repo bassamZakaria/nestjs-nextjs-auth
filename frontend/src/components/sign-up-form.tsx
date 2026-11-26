@@ -3,13 +3,14 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useId, useState } from "react";
+import { useId, useState, useTransition } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { AuthCard } from "@/components/auth-card";
 import { Button } from "@/components/button";
 import { Field, FormAlert, PasswordField } from "@/components/field";
 import { PasswordChecklist } from "@/components/password-checklist";
 import { ApiError, HttpStatus, signUp } from "@/lib/api";
+import { toFormMessage } from "@/lib/form-error";
 import { FormMessage } from "@/lib/messages";
 import { Route } from "@/lib/routes";
 import { FieldName, signUpSchema, type SignUpValues } from "@/lib/schemas";
@@ -18,6 +19,7 @@ export function SignUpForm() {
   const router = useRouter();
   const checklistId = useId();
   const [formError, setFormError] = useState<string | null>(null);
+  const [isNavigating, startNavigation] = useTransition();
   const {
     register,
     handleSubmit,
@@ -31,18 +33,20 @@ export function SignUpForm() {
 
   const password = useWatch({ control, name: FieldName.Password }) ?? "";
 
+  const pending = isSubmitting || isNavigating;
+
   const onSubmit = handleSubmit(async (values) => {
+    if (pending) return;
     setFormError(null);
     try {
       await signUp(values);
-      router.replace(Route.Home);
+      startNavigation(() => router.replace(Route.Home));
     } catch (error) {
       if (error instanceof ApiError && error.statusCode === HttpStatus.Conflict) {
         setError(FieldName.Email, { message: FormMessage.EmailTaken }, { shouldFocus: true });
         return;
       }
-      const tooMany = error instanceof ApiError && error.statusCode === HttpStatus.TooManyRequests;
-      setFormError(tooMany ? FormMessage.TooManyAttempts : FormMessage.Generic);
+      setFormError(toFormMessage(error));
     }
   });
 
@@ -83,7 +87,7 @@ export function SignUpForm() {
           {...register(FieldName.Password)}
         />
         <PasswordChecklist id={checklistId} value={password} />
-        <Button type="submit" pending={isSubmitting} pendingLabel="Creating account...">
+        <Button type="submit" pending={pending} pendingLabel="Creating account...">
           Create account
         </Button>
       </form>

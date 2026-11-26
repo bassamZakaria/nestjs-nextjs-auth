@@ -3,26 +3,20 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { useForm } from "react-hook-form";
 import { AuthCard } from "@/components/auth-card";
 import { Button } from "@/components/button";
 import { Field, FormAlert, PasswordField } from "@/components/field";
-import { ApiError, HttpStatus, signIn } from "@/lib/api";
-import { FormMessage } from "@/lib/messages";
+import { signIn } from "@/lib/api";
+import { toFormMessage } from "@/lib/form-error";
 import { Route } from "@/lib/routes";
 import { FieldName, signInSchema, type SignInValues } from "@/lib/schemas";
-
-const toMessage = (error: unknown) => {
-  if (!(error instanceof ApiError)) return FormMessage.Generic;
-  if (error.statusCode === HttpStatus.Unauthorized) return FormMessage.InvalidCredentials;
-  if (error.statusCode === HttpStatus.TooManyRequests) return FormMessage.TooManyAttempts;
-  return FormMessage.Generic;
-};
 
 export function SignInForm() {
   const router = useRouter();
   const [formError, setFormError] = useState<string | null>(null);
+  const [isNavigating, startNavigation] = useTransition();
   const {
     register,
     handleSubmit,
@@ -32,13 +26,16 @@ export function SignInForm() {
     mode: "onBlur",
   });
 
+  const pending = isSubmitting || isNavigating;
+
   const onSubmit = handleSubmit(async (values) => {
+    if (pending) return;
     setFormError(null);
     try {
       await signIn(values);
-      router.replace(Route.Home);
+      startNavigation(() => router.replace(Route.Home));
     } catch (error) {
-      setFormError(toMessage(error));
+      setFormError(toFormMessage(error));
     }
   });
 
@@ -70,7 +67,7 @@ export function SignInForm() {
           error={errors[FieldName.Password]?.message}
           {...register(FieldName.Password)}
         />
-        <Button type="submit" pending={isSubmitting} pendingLabel="Signing in...">
+        <Button type="submit" pending={pending} pendingLabel="Signing in...">
           Sign in
         </Button>
       </form>

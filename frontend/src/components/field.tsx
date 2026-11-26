@@ -23,6 +23,7 @@ export function Field({ label, error, hintId, adornment, ...input }: FieldProps)
         <input
           {...input}
           id={id}
+          required
           aria-invalid={Boolean(error)}
           aria-describedby={describedBy || undefined}
           className={`min-h-11 w-full rounded-md border-2 border-line bg-background px-3 text-base text-ink aria-invalid:border-danger ${adornment ? "pr-20" : ""}`}

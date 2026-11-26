@@ -1,3 +1,5 @@
+import type { SignInValues, SignUpValues } from "./schemas";
+
 export enum ApiPath {
   SignUp = "/api/auth/signup",
   SignIn = "/api/auth/signin",
@@ -7,10 +9,13 @@ export enum ApiPath {
 }
 
 export enum HttpStatus {
+  Ok = 200,
   NoContent = 204,
+  BadRequest = 400,
   Unauthorized = 401,
   Conflict = 409,
   TooManyRequests = 429,
+  BadGateway = 502,
 }
 
 enum HttpMethod {
@@ -28,8 +33,6 @@ const PATHS_WITHOUT_REFRESH = new Set<string>([
 ]);
 
 export type User = { id: string; email: string; name: string };
-export type SignUpBody = { email: string; name: string; password: string };
-export type SignInBody = { email: string; password: string };
 
 type ErrorBody = { message?: string | string[] };
 
@@ -91,10 +94,10 @@ const request = async <T>(path: ApiPath, method: HttpMethod, body?: object) => {
   return parse<T>(await send(path, method, body));
 };
 
-export const signUp = (body: SignUpBody) =>
+export const signUp = (body: SignUpValues) =>
   request<User>(ApiPath.SignUp, HttpMethod.Post, body);
 
-export const signIn = (body: SignInBody) =>
+export const signIn = (body: SignInValues) =>
   request<User>(ApiPath.SignIn, HttpMethod.Post, body);
 
 export const logout = () => request<void>(ApiPath.Logout, HttpMethod.Post);

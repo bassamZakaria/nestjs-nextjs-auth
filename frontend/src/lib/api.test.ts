@@ -1,9 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError, ApiPath, HttpStatus, getMe, logout, signIn, signUp } from "./api";
 
+enum LockEvent {
+  Acquired = "lock acquired",
+  RefreshSent = "refresh sent",
+  Released = "lock released",
+}
+
 const user = { id: "1", email: "ada@example.com", name: "Ada" };
 
-const json = (status: number, body: unknown) =>
+const json = (status: HttpStatus, body: unknown) =>
   new Response(JSON.stringify(body), {
     status,
     headers: { "Content-Type": "application/json" },
@@ -37,13 +43,13 @@ afterEach(() => {
 
 describe("request basics", () => {
   it("returns the parsed body on success and sends same-origin credentials", async () => {
-    const { fetchMock } = stubFetch({ [ApiPath.Me]: [() => json(200, user)] });
+    const { fetchMock } = stubFetch({ [ApiPath.Me]: [() => json(HttpStatus.Ok, user)] });
     await expect(getMe()).resolves.toEqual(user);
     expect(fetchMock).toHaveBeenCalledWith(ApiPath.Me, expect.objectContaining({ credentials: "same-origin" }));
   });
 
   it("sends JSON bodies", async () => {
-    const { fetchMock } = stubFetch({ [ApiPath.SignIn]: [() => json(200, user)] });
+    const { fetchMock } = stubFetch({ [ApiPath.SignIn]: [() => json(HttpStatus.Ok, user)] });
     await signIn({ email: "ada@example.com", password: "pw" });
     const init = fetchMock.mock.calls[0][1];
     expect(init?.body).toBe(JSON.stringify({ email: "ada@example.com", password: "pw" }));
@@ -57,31 +63,31 @@ describe("request basics", () => {
 
   it("joins array messages and keeps the status code", async () => {
     stubFetch({
-      [ApiPath.SignUp]: [() => json(400, { statusCode: 400, error: "Bad Request", message: ["a is bad", "b is bad"] })],
+      [ApiPath.SignUp]: [() => json(HttpStatus.BadRequest, { statusCode: HttpStatus.BadRequest, error: "Bad Request", message: ["a is bad", "b is bad"] })],
     });
     const error = await signUp({ email: "x", name: "y", password: "z" }).catch((e: unknown) => e);
     expect(error).toBeInstanceOf(ApiError);
-    expect(error).toMatchObject({ statusCode: 400, message: "a is bad. b is bad" });
+    expect(error).toMatchObject({ statusCode: HttpStatus.BadRequest, message: "a is bad. b is bad" });
   });
 
   it("keeps string messages and survives a non-JSON error body", async () => {
     stubFetch({
       [ApiPath.SignUp]: [
-        () => json(409, { statusCode: 409, error: "Conflict", message: "Email taken" }),
-        () => new Response("<html>bad gateway</html>", { status: 502, statusText: "Bad Gateway" }),
+        () => json(HttpStatus.Conflict, { statusCode: HttpStatus.Conflict, error: "Conflict", message: "Email taken" }),
+        () => new Response("<html>bad gateway</html>", { status: HttpStatus.BadGateway, statusText: "Bad Gateway" }),
       ],
     });
     const body = { email: "x", name: "y", password: "z" };
-    await expect(signUp(body)).rejects.toMatchObject({ statusCode: 409, message: "Email taken" });
-    await expect(signUp(body)).rejects.toMatchObject({ statusCode: 502, message: "Bad Gateway" });
+    await expect(signUp(body)).rejects.toMatchObject({ statusCode: HttpStatus.Conflict, message: "Email taken" });
+    await expect(signUp(body)).rejects.toMatchObject({ statusCode: HttpStatus.BadGateway, message: "Bad Gateway" });
   });
 });
 
 describe("refresh and retry", () => {
   it("refreshes on 401 and retries the original request once", async () => {
     const { calls } = stubFetch({
-      [ApiPath.Me]: [() => json(401, {}), () => json(200, user)],
-      [ApiPath.Refresh]: [() => json(200, user)],
+      [ApiPath.Me]: [() => json(HttpStatus.Unauthorized, {}), () => json(HttpStatus.Ok, user)],
+      [ApiPath.Refresh]: [() => json(HttpStatus.Ok, user)],
     });
     await expect(getMe()).resolves.toEqual(user);
     expect(calls).toEqual([ApiPath.Me, ApiPath.Refresh, ApiPath.Me]);
@@ -89,8 +95,8 @@ describe("refresh and retry", () => {
 
   it("propagates the error and does not retry when the refresh fails", async () => {
     const { calls } = stubFetch({
-      [ApiPath.Me]: [() => json(401, {})],
-      [ApiPath.Refresh]: [() => json(401, { statusCode: 401, message: "Unauthorized" })],
+      [ApiPath.Me]: [() => json(HttpStatus.Unauthorized, {})],
+      [ApiPath.Refresh]: [() => json(HttpStatus.Unauthorized, { statusCode: HttpStatus.Unauthorized, message: "Unauthorized" })],
     });
     await expect(getMe()).rejects.toMatchObject({ statusCode: HttpStatus.Unauthorized });
     expect(calls).toEqual([ApiPath.Me, ApiPath.Refresh]);
@@ -98,8 +104,8 @@ describe("refresh and retry", () => {
 
   it("retries only once when the retry also returns 401", async () => {
     const { calls } = stubFetch({
-      [ApiPath.Me]: [() => json(401, {}), () => json(401, {})],
-      [ApiPath.Refresh]: [() => json(200, user)],
+      [ApiPath.Me]: [() => json(HttpStatus.Unauthorized, {}), () => json(HttpStatus.Unauthorized, {})],
+      [ApiPath.Refresh]: [() => json(HttpStatus.Ok, user)],
     });
     await expect(getMe()).rejects.toMatchObject({ statusCode: HttpStatus.Unauthorized });
     expect(calls).toEqual([ApiPath.Me, ApiPath.Refresh, ApiPath.Me]);
@@ -107,8 +113,8 @@ describe("refresh and retry", () => {
 
   it("shares one refresh between concurrent 401s", async () => {
     const { calls } = stubFetch({
-      [ApiPath.Me]: [() => json(401, {}), () => json(401, {}), () => json(200, user), () => json(200, user)],
-      [ApiPath.Refresh]: [() => json(200, user)],
+      [ApiPath.Me]: [() => json(HttpStatus.Unauthorized, {}), () => json(HttpStatus.Unauthorized, {}), () => json(HttpStatus.Ok, user), () => json(HttpStatus.Ok, user)],
+      [ApiPath.Refresh]: [() => json(HttpStatus.Ok, user)],
     });
     await expect(Promise.all([getMe(), getMe()])).resolves.toEqual([user, user]);
     expect(countOf(calls, ApiPath.Refresh)).toBe(1);
@@ -117,11 +123,21 @@ describe("refresh and retry", () => {
 
   it("starts a new refresh for a later 401 once the first has settled", async () => {
     const { calls } = stubFetch({
-      [ApiPath.Me]: [() => json(401, {}), () => json(200, user), () => json(401, {}), () => json(200, user)],
-      [ApiPath.Refresh]: [() => json(200, user), () => json(200, user)],
+      [ApiPath.Me]: [() => json(HttpStatus.Unauthorized, {}), () => json(HttpStatus.Ok, user), () => json(HttpStatus.Unauthorized, {}), () => json(HttpStatus.Ok, user)],
+      [ApiPath.Refresh]: [() => json(HttpStatus.Ok, user), () => json(HttpStatus.Ok, user)],
     });
     await getMe();
     await getMe();
+    expect(countOf(calls, ApiPath.Refresh)).toBe(2);
+  });
+
+  it("starts a fresh refresh for a later 401 after a refresh failed", async () => {
+    const { calls } = stubFetch({
+      [ApiPath.Me]: [() => json(HttpStatus.Unauthorized, {}), () => json(HttpStatus.Unauthorized, {}), () => json(HttpStatus.Ok, user)],
+      [ApiPath.Refresh]: [() => json(HttpStatus.Unauthorized, {}), () => json(HttpStatus.Ok, user)],
+    });
+    await expect(getMe()).rejects.toMatchObject({ statusCode: HttpStatus.Unauthorized });
+    await expect(getMe()).resolves.toEqual(user);
     expect(countOf(calls, ApiPath.Refresh)).toBe(2);
   });
 
@@ -130,15 +146,15 @@ describe("refresh and retry", () => {
     ["sign-up", () => signUp({ email: "a@b.co", name: "Ada", password: "pw" }), ApiPath.SignUp],
     ["logout", () => logout(), ApiPath.Logout],
   ])("never refreshes after a 401 from %s", async (_label, call, path) => {
-    const { calls } = stubFetch({ [path]: [() => json(401, { message: "nope" })] });
+    const { calls } = stubFetch({ [path]: [() => json(HttpStatus.Unauthorized, { message: "nope" })] });
     await expect(call()).rejects.toMatchObject({ statusCode: HttpStatus.Unauthorized });
     expect(calls).toEqual([path]);
   });
 
   it("never refreshes after a 401 from refresh itself", async () => {
     const { calls } = stubFetch({
-      [ApiPath.Me]: [() => json(401, {})],
-      [ApiPath.Refresh]: [() => json(401, {})],
+      [ApiPath.Me]: [() => json(HttpStatus.Unauthorized, {})],
+      [ApiPath.Refresh]: [() => json(HttpStatus.Unauthorized, {})],
     });
     await expect(getMe()).rejects.toBeInstanceOf(ApiError);
     expect(countOf(calls, ApiPath.Refresh)).toBe(1);
@@ -147,26 +163,26 @@ describe("refresh and retry", () => {
 
 describe("cross-tab serialisation", () => {
   it("runs the refresh inside a Web Lock", async () => {
-    const order: string[] = [];
+    const order: LockEvent[] = [];
     const request = vi.fn(async (_name: string, task: () => Promise<unknown>) => {
-      order.push("lock acquired");
+      order.push(LockEvent.Acquired);
       const result = await task();
-      order.push("lock released");
+      order.push(LockEvent.Released);
       return result;
     });
     vi.stubGlobal("navigator", { locks: { request } });
     stubFetch({
-      [ApiPath.Me]: [() => json(401, {}), () => json(200, user)],
+      [ApiPath.Me]: [() => json(HttpStatus.Unauthorized, {}), () => json(HttpStatus.Ok, user)],
       [ApiPath.Refresh]: [
         () => {
-          order.push("refresh sent");
-          return json(200, user);
+          order.push(LockEvent.RefreshSent);
+          return json(HttpStatus.Ok, user);
         },
       ],
     });
     await getMe();
     expect(request).toHaveBeenCalledTimes(1);
-    expect(order).toEqual(["lock acquired", "refresh sent", "lock released"]);
+    expect(order).toEqual([LockEvent.Acquired, LockEvent.RefreshSent, LockEvent.Released]);
   });
 
   it("waits for a lock held elsewhere before sending the refresh", async () => {
@@ -180,8 +196,8 @@ describe("cross-tab serialisation", () => {
     });
     vi.stubGlobal("navigator", { locks: { request } });
     const { calls } = stubFetch({
-      [ApiPath.Me]: [() => json(401, {}), () => json(200, user)],
-      [ApiPath.Refresh]: [() => json(200, user)],
+      [ApiPath.Me]: [() => json(HttpStatus.Unauthorized, {}), () => json(HttpStatus.Ok, user)],
+      [ApiPath.Refresh]: [() => json(HttpStatus.Ok, user)],
     });
     const pending = getMe();
     await vi.waitFor(() => expect(request).toHaveBeenCalled());
@@ -191,11 +207,11 @@ describe("cross-tab serialisation", () => {
     expect(calls).toEqual([ApiPath.Me, ApiPath.Refresh, ApiPath.Me]);
   });
 
-  it("falls back to the in-tab refresh when navigator.locks is unavailable", async () => {
-    vi.stubGlobal("navigator", {});
+  it("falls back to the in-tab refresh when navigator is undefined", async () => {
+    vi.stubGlobal("navigator", undefined);
     const { calls } = stubFetch({
-      [ApiPath.Me]: [() => json(401, {}), () => json(200, user)],
-      [ApiPath.Refresh]: [() => json(200, user)],
+      [ApiPath.Me]: [() => json(HttpStatus.Unauthorized, {}), () => json(HttpStatus.Ok, user)],
+      [ApiPath.Refresh]: [() => json(HttpStatus.Ok, user)],
     });
     await expect(getMe()).resolves.toEqual(user);
     expect(calls).toEqual([ApiPath.Me, ApiPath.Refresh, ApiPath.Me]);

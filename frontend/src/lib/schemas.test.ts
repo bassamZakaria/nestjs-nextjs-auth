@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   FieldName,
+  PASSWORD_CHECKS,
   PasswordRule,
   signInSchema,
   signUpSchema,
@@ -56,6 +57,14 @@ describe("signUpSchema", () => {
 
   it("rejects a password shorter than 8 characters", () => {
     expect(passwordIssues("abc12!")).toEqual([PasswordRule.Length]);
+  });
+
+  it("counts code points, not UTF-16 units, in the length rule and the checklist", () => {
+    const password = "a1!😀😀😀";
+    expect(passwordIssues(password)).toEqual([PasswordRule.Length]);
+    const lengthCheck = PASSWORD_CHECKS.find(({ rule }) => rule === PasswordRule.Length);
+    expect(lengthCheck?.test(password)).toBe(false);
+    expect(lengthCheck?.test("a1!😀😀😀😀😀")).toBe(true);
   });
 
   it("rejects a password longer than 128 characters", () => {
