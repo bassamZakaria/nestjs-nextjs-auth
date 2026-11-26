@@ -6,7 +6,7 @@ How AI was used to build it: [AI.md](AI.md).
 
 ## Run it
 
-One command, and only Docker is needed:
+Docker is used only so that one command starts everything: MongoDB, the API and the web app. Nothing else needs installing.
 
 ```bash
 docker compose up --build
@@ -53,23 +53,22 @@ In PowerShell: `$env:ACCESS_TOKEN_TTL_SECONDS=60; docker compose up --build`.
 | `POST /api/auth/logout` | refresh cookie | End the session |
 | `GET /api/users/me` | access cookie | The signed-in user (protected) |
 
-## Develop
+## Run without Docker
 
-Needs Node 22.22.3+ and MongoDB on `localhost:27017`.
+Needs Node 22.22.3+ and any MongoDB: a local install, or a free MongoDB Atlas cluster.
 
 ```bash
-docker run -d -p 127.0.0.1:27017:27017 mongo:8
-
 cd backend                           # API on :4000
-cp .env.example .env                 # then set JWT_ACCESS_SECRET (openssl rand -base64 48)
+cp .env.example .env                 # set JWT_ACCESS_SECRET (openssl rand -base64 48)
 npm ci && npm run start:dev
 
 cd frontend                          # web on :3000, in a second terminal
 npm ci && npm run dev
 ```
 
-Checks, in either folder: `npm run lint && npm run typecheck && npm test && npm run build`.
-Every setting is described in [`backend/.env.example`](backend/.env.example).
+The API expects MongoDB at `mongodb://127.0.0.1:27017/auth`; for any other address, change `MONGODB_URI` in `backend/.env`. Every setting is described in [`backend/.env.example`](backend/.env.example).
+
+Checks, in either folder: `npm run lint && npm run typecheck && npm test && npm run build`. The tests start their own in-memory MongoDB, so they need neither Docker nor a database.
 
 ## Roadmap
 
