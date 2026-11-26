@@ -6,21 +6,40 @@ How AI was used to build it: [AI.md](AI.md).
 
 ## Run it
 
-Docker is used only so that one command starts everything: MongoDB, the API and the web app. Nothing else needs installing.
+Docker is used only so that one command starts everything: MongoDB, the API and the web app. Nothing else needs installing, and there is nothing to configure.
+
+**You need:** Docker Desktop (or any Docker with Compose v2), running, and port 3000 free.
 
 ```bash
+git clone https://github.com/bassamZakaria/nestjs-nextjs-auth.git
+cd nestjs-nextjs-auth
 docker compose up --build
 ```
 
-Then open **http://localhost:3000** (use `localhost`, not `127.0.0.1`). API docs: http://localhost:3000/api/docs.
+1. The first run builds two images and takes a few minutes. Later runs start in seconds.
+2. When the logs settle, open **http://localhost:3000**. Use `localhost`, not `127.0.0.1`: the API only accepts writes from that origin.
+3. You land on the sign-in page. Choose **Create an account**, sign up (a password such as `Passw0rd!x` passes the rules), and you reach the protected page with a **Log out** button.
+4. API docs (Swagger) are at http://localhost:3000/api/docs.
 
-The access token lasts 15 minutes. To watch it refresh silently after one minute instead:
+**Stop it:** press `Ctrl+C`, then `docker compose down`. Add `-v` to also delete the database.
+
+### See the token refresh
+
+The access token lasts 15 minutes. To watch it refresh silently after one minute instead, start with:
 
 ```bash
 ACCESS_TOKEN_TTL_SECONDS=60 docker compose up --build
 ```
 
 In PowerShell: `$env:ACCESS_TOKEN_TTL_SECONDS=60; docker compose up --build`.
+
+Sign in, wait a minute, then reload the page with the browser's Network tab open. You will see `/api/users/me` answer 401, `/api/auth/refresh` answer 200, and `/api/users/me` repeat with 200, while the page stays signed in.
+
+### If something goes wrong
+
+- **"port is already allocated":** something else is using port 3000. Stop it and run the command again.
+- **Forms answer 403:** the page was opened as `127.0.0.1:3000`. Open `localhost:3000`.
+- **"Too many requests":** the rate limiter. Sign-up allows 5 per minute; wait a minute.
 
 ## What's built
 
@@ -55,20 +74,45 @@ In PowerShell: `$env:ACCESS_TOKEN_TTL_SECONDS=60; docker compose up --build`.
 
 ## Run without Docker
 
-Needs Node 22.22.3+ and any MongoDB: a local install, or a free MongoDB Atlas cluster.
+**You need:** Node 22.22.3 or newer (with npm) and a MongoDB server.
+
+**1. MongoDB.** Any of these works:
+- a local install, running on its default port 27017;
+- a free MongoDB Atlas cluster (copy its `mongodb+srv://...` connection string);
+- MongoDB alone from Docker: `docker run -d -p 127.0.0.1:27017:27017 mongo:8`.
+
+**2. The API**, in one terminal:
 
 ```bash
-cd backend                           # API on :4000
-cp .env.example .env                 # set JWT_ACCESS_SECRET (openssl rand -base64 48)
-npm ci && npm run start:dev
-
-cd frontend                          # web on :3000, in a second terminal
-npm ci && npm run dev
+cd backend
+cp .env.example .env        # Windows: copy .env.example .env
+npm ci
+npm run start:dev           # http://127.0.0.1:4000
 ```
 
-The API expects MongoDB at `mongodb://127.0.0.1:27017/auth`; for any other address, change `MONGODB_URI` in `backend/.env`. Every setting is described in [`backend/.env.example`](backend/.env.example).
+Before starting it, edit `backend/.env`:
+- `JWT_ACCESS_SECRET` is required and must be at least 32 characters. Generate one with `node -e "console.log(require('crypto').randomBytes(48).toString('base64'))"`.
+- `MONGODB_URI` defaults to `mongodb://127.0.0.1:27017/auth`. Change it only if your MongoDB is elsewhere (for Atlas, paste the connection string).
 
-Checks, in either folder: `npm run lint && npm run typecheck && npm test && npm run build`. The tests start their own in-memory MongoDB, so they need neither Docker nor a database.
+If the API stops at boot with "Invalid environment", one of these values is missing or too short. Every setting is described in [`backend/.env.example`](backend/.env.example).
+
+**3. The web app**, in a second terminal:
+
+```bash
+cd frontend
+npm ci
+npm run dev                 # http://localhost:3000
+```
+
+It needs no configuration: it forwards `/api/*` to the API on port 4000. Open **http://localhost:3000**.
+
+**4. Tests and checks**, in either folder:
+
+```bash
+npm run lint && npm run typecheck && npm test && npm run build
+```
+
+The tests start their own in-memory MongoDB, so they need neither Docker nor a database. The backend's `npm ci` downloads that MongoDB binary once, so the first install is slower.
 
 ## Roadmap
 
