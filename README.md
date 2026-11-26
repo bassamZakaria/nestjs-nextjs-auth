@@ -9,7 +9,6 @@ Sign up, sign in and a protected page, built with NestJS, MongoDB and Next.js in
 | Database | MongoDB (Docker Compose for local development) |
 | CI | GitHub Actions: lint, typecheck, test and build for both packages |
 
-See [AI.md](AI.md) for how AI assistance was used.
 
 ## Run it locally
 
