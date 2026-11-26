@@ -1,7 +1,7 @@
 import type { ExecutionContext } from '@nestjs/common';
 import type { ThrottlerModuleOptions } from '@nestjs/throttler';
 import type { Request } from 'express';
-import { normaliseEmail } from './normalise-email.js';
+import { normaliseEmail } from '../common/normalise-email.js';
 
 export enum ThrottlerName {
   Default = 'default',

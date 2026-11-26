@@ -8,7 +8,6 @@ import {
   Res,
   UnauthorizedException,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import {
   ApiBadRequestResponse,
   ApiConflictResponse,
@@ -23,8 +22,8 @@ import { SkipThrottle, Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 import { Public } from '../common/public.decorator.js';
 import { AuthRoute, RoutePrefix } from '../common/routes.js';
-import { STRICT_LIMITS, ThrottlerName } from '../common/throttling.js';
-import type { EnvironmentVariables } from '../config/env.validation.js';
+import { STRICT_LIMITS, ThrottlerName } from './throttling.js';
+import { AppConfigService } from '../config/env.validation.js';
 import { toUserResponse, UserResponseDto } from '../users/user-response.dto.js';
 import {
   clearAuthCookies,
@@ -42,7 +41,7 @@ import { SignUpDto } from './dto/sign-up.dto.js';
 export class AuthController {
   constructor(
     private readonly auth: AuthService,
-    private readonly config: ConfigService<EnvironmentVariables, true>,
+    private readonly config: AppConfigService,
   ) {}
 
   @Post(AuthRoute.SignUp)

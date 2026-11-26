@@ -8,10 +8,10 @@ export class Session {
   userId: Types.ObjectId;
 
   @Prop({ required: true })
-  tokenHash: string;
+  familyHash: string;
 
-  @Prop()
-  previousTokenHash?: string;
+  @Prop({ required: true })
+  tokenHash: string;
 
   @Prop({ required: true, expires: 0 })
   expiresAt: Date;

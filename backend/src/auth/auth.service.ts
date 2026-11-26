@@ -1,8 +1,8 @@
 import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import type { AccessTokenPayload } from '../common/current-user-id.decorator.js';
 import type { UserDocument } from '../users/user.schema.js';
 import { UsersService } from '../users/users.service.js';
-import type { AccessTokenPayload } from './access-token.js';
 import type { IssuedTokens } from './auth-cookies.js';
 import type { SignInDto } from './dto/sign-in.dto.js';
 import type { SignUpDto } from './dto/sign-up.dto.js';

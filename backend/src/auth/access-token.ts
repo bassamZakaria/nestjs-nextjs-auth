@@ -1,15 +1,10 @@
 import type { JwtModuleOptions } from '@nestjs/jwt';
-import type { Request } from 'express';
 import { ACCESS_TOKEN_TTL_SECONDS } from './auth-cookies.js';
 
 export const ACCESS_TOKEN_ISSUER = 'auth-api';
 export const ACCESS_TOKEN_AUDIENCE = 'auth-web';
 
 const ALGORITHM = 'HS256';
-
-export type AccessTokenPayload = { sub: string; sid: string };
-
-export type AuthenticatedRequest = Request & { user: AccessTokenPayload };
 
 export const jwtOptions = (secret: string): JwtModuleOptions => ({
   secret,

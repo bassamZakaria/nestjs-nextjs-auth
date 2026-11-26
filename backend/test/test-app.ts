@@ -52,12 +52,14 @@ type TestAppOptions = {
   throttling?: boolean;
   nodeEnv?: NodeEnv;
   trustProxyHops?: number;
+  logLevel?: LogLevel;
 };
 
 export const createTestApp = async ({
   throttling = false,
   nodeEnv = NodeEnv.Test,
   trustProxyHops = 0,
+  logLevel = LogLevel.Silent,
 }: TestAppOptions = {}) => {
   const mongo = await MongoMemoryServer.create();
   Object.assign(process.env, {
@@ -66,7 +68,7 @@ export const createTestApp = async ({
     JWT_ACCESS_SECRET: JWT_SECRET,
     APP_ORIGIN,
     TRUST_PROXY_HOPS: String(trustProxyHops),
-    LOG_LEVEL: LogLevel.Silent,
+    LOG_LEVEL: logLevel,
   });
   const { AppModule } = await import('../src/app.module.js');
   const { configureApp } = await import('../src/app.setup.js');

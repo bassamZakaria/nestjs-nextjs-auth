@@ -4,9 +4,8 @@ import {
   ForbiddenException,
   Injectable,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import type { Request } from 'express';
-import type { EnvironmentVariables } from '../config/env.validation.js';
+import { AppConfigService } from '../config/env.validation.js';
 
 enum SafeMethod {
   Get = 'GET',
@@ -18,9 +17,7 @@ const SAFE_METHODS = new Set<string>(Object.values(SafeMethod));
 
 @Injectable()
 export class OriginGuard implements CanActivate {
-  constructor(
-    private readonly config: ConfigService<EnvironmentVariables, true>,
-  ) {}
+  constructor(private readonly config: AppConfigService) {}
 
   canActivate(context: ExecutionContext): boolean {
     const request = context.switchToHttp().getRequest<Request>();

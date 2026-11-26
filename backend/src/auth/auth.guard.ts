@@ -4,15 +4,14 @@ import {
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
-import { IS_PUBLIC_KEY } from '../common/public.decorator.js';
-import type { EnvironmentVariables } from '../config/env.validation.js';
 import type {
   AccessTokenPayload,
   AuthenticatedRequest,
-} from './access-token.js';
+} from '../common/current-user-id.decorator.js';
+import { IS_PUBLIC_KEY } from '../common/public.decorator.js';
+import { AppConfigService } from '../config/env.validation.js';
 import { cookieNamesFor, readCookie } from './auth-cookies.js';
 
 @Injectable()
@@ -20,7 +19,7 @@ export class AuthGuard implements CanActivate {
   constructor(
     private readonly reflector: Reflector,
     private readonly jwt: JwtService,
-    private readonly config: ConfigService<EnvironmentVariables, true>,
+    private readonly config: AppConfigService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {

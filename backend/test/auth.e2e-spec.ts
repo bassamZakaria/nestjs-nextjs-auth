@@ -43,6 +43,15 @@ const refreshWith = (refreshToken: string, accessToken = '') =>
       `${CookieName.Refresh}=${refreshToken}; ${CookieName.Access}=${accessToken}`,
     );
 
+const logoutWith = (refreshToken: string) =>
+  t
+    .http()
+    .post(path.logout)
+    .set('Cookie', `${CookieName.Refresh}=${refreshToken}`);
+
+const sessionCount = (refreshToken: string) =>
+  t.sessions.countDocuments({ _id: refreshToken.split('.')[0] });
+
 const meWith = (accessToken: string) =>
   t.http().get(path.me).set('Cookie', `${CookieName.Access}=${accessToken}`);
 
@@ -477,6 +486,7 @@ describe('POST /api/auth/refresh', () => {
 
     expect(response.status).toBe(401);
     expectClearedCookies(response);
+    expect(await sessionCount(original.refresh)).toBe(1);
   });
 
   it('declares a TTL index so Mongo deletes expired sessions', async () => {
@@ -496,7 +506,7 @@ describe('POST /api/auth/refresh', () => {
     ],
     [
       'an unknown session id',
-      `${CookieName.Refresh}=000000000000000000000000.${'a'.repeat(43)}`,
+      `${CookieName.Refresh}=000000000000000000000000.${'a'.repeat(43)}.${'a'.repeat(43)}`,
     ],
   ])('answers 401 and clears both cookies for %s', async (_case, cookie) => {
     const response = await t.http().post(path.refresh).set('Cookie', cookie);
@@ -507,21 +517,48 @@ describe('POST /api/auth/refresh', () => {
   });
 });
 
-describe('a forged secret on a real session id', () => {
-  it('leaves the session intact through logout and refresh', async () => {
-    const tokens = tokensOf(await signUp());
-    const [sessionId, secret] = tokens.refresh.split('.');
-    const forged = `${sessionId}.${secret.startsWith('a') ? 'b' : 'a'}${secret.slice(1)}`;
+describe('refresh token family', () => {
+  const madeUp = 'a'.repeat(43);
 
-    await t
-      .http()
-      .post(path.logout)
-      .set('Cookie', `${CookieName.Refresh}=${forged}`)
-      .expect(204);
+  it('lets a token that was already rotated out end the session on logout', async () => {
+    const original = tokensOf(await signUp());
+    const next = tokensOf(await refreshWith(original.refresh).expect(200));
+
+    await logoutWith(original.refresh).expect(204);
+
+    await refreshWith(next.refresh).expect(401);
+  });
+
+  it('revokes the session when a token from two rotations ago is replayed', async () => {
+    const original = tokensOf(await signUp());
+    const second = tokensOf(await refreshWith(original.refresh).expect(200));
+    const third = tokensOf(await refreshWith(second.refresh).expect(200));
+
+    await refreshWith(original.refresh).expect(401);
+
+    expect(await sessionCount(original.refresh)).toBe(0);
+    await refreshWith(third.refresh).expect(401);
+  });
+
+  it('leaves the session intact through logout and refresh with a forged family and secret', async () => {
+    const tokens = tokensOf(await signUp());
+    const forged = `${tokens.refresh.split('.')[0]}.${madeUp}.${madeUp}`;
+
+    await logoutWith(forged).expect(204);
     await refreshWith(forged).expect(401);
 
-    expect(await t.sessions.countDocuments({ _id: sessionId })).toBe(1);
+    expect(await sessionCount(tokens.refresh)).toBe(1);
     await refreshWith(tokens.refresh).expect(200);
+  });
+
+  it('revokes the session for the real family with a made-up secret, because only a past holder of a real token knows the family', async () => {
+    const tokens = tokensOf(await signUp());
+    const [sessionId, family] = tokens.refresh.split('.');
+
+    await refreshWith(`${sessionId}.${family}.${madeUp}`).expect(401);
+
+    expect(await sessionCount(tokens.refresh)).toBe(0);
+    await refreshWith(tokens.refresh).expect(401);
   });
 });
 

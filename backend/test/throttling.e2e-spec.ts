@@ -3,7 +3,7 @@ import {
   SIGN_IN_PER_EMAIL_LIMIT,
   STRICT_LIMITS,
   ThrottlerName,
-} from '../src/common/throttling.js';
+} from '../src/auth/throttling.js';
 import {
   createTestApp,
   HttpErrorName,

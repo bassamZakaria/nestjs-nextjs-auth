@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, it } from 'vitest';
-import { STRICT_LIMITS, ThrottlerName } from '../src/common/throttling.js';
+import { STRICT_LIMITS, ThrottlerName } from '../src/auth/throttling.js';
 import { createTestApp, path, type TestApp } from './test-app.js';
 
 const PER_IP_SIGN_IN_LIMIT = STRICT_LIMITS.signIn[ThrottlerName.Default].limit;

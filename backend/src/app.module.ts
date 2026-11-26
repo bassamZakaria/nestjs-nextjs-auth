@@ -8,16 +8,14 @@ import { AuthGuard } from './auth/auth.guard.js';
 import { AuthModule } from './auth/auth.module.js';
 import { AllExceptionsFilter } from './common/all-exceptions.filter.js';
 import { OriginGuard } from './common/origin.guard.js';
-import { throttlerOptions } from './common/throttling.js';
+import { throttlerOptions } from './auth/throttling.js';
 import type { Request } from 'express';
 import {
   LogLevel,
   validateEnv,
-  type EnvironmentVariables,
+  type AppConfigService,
 } from './config/env.validation.js';
 import { UsersModule } from './users/users.module.js';
-
-type Config = ConfigService<EnvironmentVariables, true>;
 
 @Module({
   imports: [
@@ -28,7 +26,7 @@ type Config = ConfigService<EnvironmentVariables, true>;
     }),
     LoggerModule.forRootAsync({
       inject: [ConfigService],
-      useFactory: (config: Config) => ({
+      useFactory: (config: AppConfigService) => ({
         pinoHttp: {
           level: config.get('LOG_LEVEL', { infer: true }),
           customProps: (request) => ({ clientIp: (request as Request).ip }),
@@ -46,7 +44,7 @@ type Config = ConfigService<EnvironmentVariables, true>;
     }),
     MongooseModule.forRootAsync({
       inject: [ConfigService],
-      useFactory: (config: Config) => ({
+      useFactory: (config: AppConfigService) => ({
         uri: config.get('MONGODB_URI', { infer: true }),
       }),
     }),

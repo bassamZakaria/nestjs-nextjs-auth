@@ -5,7 +5,7 @@ import {
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
-import { CurrentUserId } from '../auth/current-user-id.decorator.js';
+import { CurrentUserId } from '../common/current-user-id.decorator.js';
 import { RoutePrefix, UsersRoute } from '../common/routes.js';
 import { toUserResponse, UserResponseDto } from './user-response.dto.js';
 import { UsersService } from './users.service.js';

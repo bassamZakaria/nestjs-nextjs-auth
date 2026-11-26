@@ -1,4 +1,5 @@
 import 'reflect-metadata';
+import { ConfigService } from '@nestjs/config';
 import { plainToInstance, Type } from 'class-transformer';
 import {
   IsEnum,
@@ -61,6 +62,9 @@ export class EnvironmentVariables {
   @IsEnum(LogLevel)
   LOG_LEVEL = LogLevel.Info;
 }
+
+export const AppConfigService = ConfigService<EnvironmentVariables, true>;
+export type AppConfigService = ConfigService<EnvironmentVariables, true>;
 
 export const validateEnv = (config: Record<string, unknown>) => {
   const env = plainToInstance(EnvironmentVariables, config);

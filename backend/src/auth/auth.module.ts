@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { MongooseModule } from '@nestjs/mongoose';
-import type { EnvironmentVariables } from '../config/env.validation.js';
+import type { AppConfigService } from '../config/env.validation.js';
 import { UsersModule } from '../users/users.module.js';
 import { jwtOptions } from './access-token.js';
 import { AuthController } from './auth.controller.js';
@@ -17,7 +17,7 @@ import { SessionsService } from './sessions.service.js';
     MongooseModule.forFeature([{ name: Session.name, schema: SessionSchema }]),
     JwtModule.registerAsync({
       inject: [ConfigService],
-      useFactory: (config: ConfigService<EnvironmentVariables, true>) =>
+      useFactory: (config: AppConfigService) =>
         jwtOptions(config.get('JWT_ACCESS_SECRET', { infer: true })),
     }),
   ],
