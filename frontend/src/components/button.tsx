@@ -10,7 +10,7 @@ export function Button({ pending, pendingLabel, children, ...rest }: ButtonProps
     <button
       {...rest}
       aria-disabled={pending || undefined}
-      className="min-h-11 w-full rounded-md bg-accent px-4 font-semibold text-on-accent transition-colors hover:bg-accent-strong aria-disabled:cursor-not-allowed aria-disabled:opacity-70"
+      className="min-h-11 w-full rounded-md bg-accent px-4 font-semibold text-on-accent transition-colors not-aria-disabled:hover:bg-accent-strong aria-disabled:cursor-not-allowed aria-disabled:opacity-70"
     >
       {pending ? pendingLabel : children}
     </button>

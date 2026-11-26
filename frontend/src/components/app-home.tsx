@@ -10,9 +10,9 @@ import { FormMessage } from "@/lib/messages";
 import { Route } from "@/lib/routes";
 
 enum LoadState {
-  Loading,
-  Failed,
-  Retrying,
+  Loading = "loading",
+  Failed = "failed",
+  Retrying = "retrying",
 }
 
 export function AppHome() {
@@ -71,24 +71,26 @@ export function AppHome() {
   if (!user && loadState === LoadState.Loading) {
     return (
       <p role="status" className="w-full text-center text-muted">
-        Loading...
+        Loading…
       </p>
     );
   }
 
   if (!user) {
     return (
-      <div className="w-full space-y-4">
-        <FormAlert message={FormMessage.LoadFailed} />
-        <Button
-          type="button"
-          onClick={retry}
-          pending={loadState === LoadState.Retrying}
-          pendingLabel="Retrying..."
-        >
-          Try again
-        </Button>
-      </div>
+      <AuthCard title="Could not load your account">
+        <div className="space-y-4">
+          <FormAlert message={loadState === LoadState.Failed ? FormMessage.Generic : null} />
+          <Button
+            type="button"
+            onClick={retry}
+            pending={loadState === LoadState.Retrying}
+            pendingLabel="Retrying…"
+          >
+            Try again
+          </Button>
+        </div>
+      </AuthCard>
     );
   }
 
@@ -100,7 +102,7 @@ export function AppHome() {
     >
       <div className="space-y-4">
         <FormAlert message={logoutError} />
-        <Button type="button" onClick={onLogout} pending={loggingOutPending} pendingLabel="Logging out...">
+        <Button type="button" onClick={onLogout} pending={loggingOutPending} pendingLabel="Logging out…">
           Log out
         </Button>
       </div>

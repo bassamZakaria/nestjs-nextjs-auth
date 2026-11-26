@@ -39,8 +39,8 @@ API documentation (Swagger) is at <http://localhost:3000/api/docs> outside produ
 ## Tests and checks
 
 ```bash
-cd backend  && npm run lint && npm run typecheck && npm run build && npm test
-cd frontend && npm run lint && npm run typecheck && npm test && npm run build
+(cd backend  && npm run lint && npm run typecheck && npm run build && npm test)
+(cd frontend && npm run lint && npm run typecheck && npm test && npm run build)
 ```
 
 Back-end tests are end-to-end: they boot the real application against an in-memory MongoDB, so they need no Docker. They cover validation, duplicate emails, the generic sign-in error, refresh rotation and replay, concurrent refreshes, session expiry, logout, the Origin check, JWT tampering, operator-object injection, rate limiting and production cookie settings. Front-end tests cover the form rules and the API client's refresh-and-retry logic.
@@ -62,11 +62,11 @@ Field rules are enforced on both sides with the same regular expressions: a vali
 ### Session design
 
 - **Access token:** a JWT (HS256, 15 minutes) carrying the user id and session id. Verification pins the algorithm and checks issuer, audience and expiry.
-- **Refresh token:** an opaque `<sessionId>.<secret>` value. MongoDB stores only the SHA-256 hash of the secret.
+- **Refresh token:** an opaque `<sessionId>.<family>.<secret>` value. The family is fixed for the life of the session; the secret changes on every refresh. MongoDB stores only SHA-256 hashes of both.
 - **Cookies:** both tokens live in `HttpOnly`, `SameSite=Strict` cookies, so page scripts can never read them. In production they are also `Secure` and use the `__Host-` name prefix.
-- **Rotation:** every refresh swaps the stored hash in one atomic update and issues a new refresh token. Presenting the token that was just rotated out is treated as theft and revokes the session.
+- **Rotation:** every refresh swaps the stored secret hash in one atomic update and issues a new refresh token. Presenting an older secret from the same family is treated as theft and revokes the session. A guessed session id without the family does nothing.
 - **Lifetime:** a session ends 7 days after sign-in. Rotation never extends it. A TTL index removes expired sessions.
-- **Logout:** deletes the session on the server and clears both cookies.
+- **Logout:** deletes the session on the server and clears both cookies. Any refresh token ever issued for the session can end it.
 - **Browser client:** on a `401` it refreshes once and retries. Refreshes are serialised across tabs with the Web Locks API, so two tabs never present the same refresh token.
 
 ### Security measures

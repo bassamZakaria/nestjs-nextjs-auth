@@ -100,6 +100,7 @@ export const signUp = (body: SignUpValues) =>
 export const signIn = (body: SignInValues) =>
   request<User>(ApiPath.SignIn, HttpMethod.Post, body);
 
-export const logout = () => request<void>(ApiPath.Logout, HttpMethod.Post);
+export const logout = () =>
+  runExclusive(() => request<void>(ApiPath.Logout, HttpMethod.Post));
 
 export const getMe = () => request<User>(ApiPath.Me, HttpMethod.Get);

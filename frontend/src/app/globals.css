@@ -53,6 +53,10 @@ body {
   outline-offset: 2px;
 }
 
+[tabindex="-1"]:focus-visible {
+  outline: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

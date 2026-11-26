@@ -3,6 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import type { FormEvent } from "react";
 import { useId, useState, useTransition } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { AuthCard } from "@/components/auth-card";
@@ -35,8 +36,7 @@ export function SignUpForm() {
 
   const pending = isSubmitting || isNavigating;
 
-  const onSubmit = handleSubmit(async (values) => {
-    if (pending) return;
+  const submit = handleSubmit(async (values) => {
     setFormError(null);
     try {
       await signUp(values);
@@ -49,6 +49,9 @@ export function SignUpForm() {
       setFormError(toFormMessage(error));
     }
   });
+
+  const onSubmit = (event: FormEvent<HTMLFormElement>) =>
+    pending ? event.preventDefault() : submit(event);
 
   return (
     <AuthCard
@@ -87,7 +90,7 @@ export function SignUpForm() {
           {...register(FieldName.Password)}
         />
         <PasswordChecklist id={checklistId} value={password} />
-        <Button type="submit" pending={pending} pendingLabel="Creating account...">
+        <Button type="submit" pending={pending} pendingLabel="Creating account…">
           Create account
         </Button>
       </form>

@@ -207,6 +207,15 @@ describe("cross-tab serialisation", () => {
     expect(calls).toEqual([ApiPath.Me, ApiPath.Refresh, ApiPath.Me]);
   });
 
+  it("runs logout inside the same Web Lock", async () => {
+    const request = vi.fn((name: string, task: () => Promise<unknown>) => task());
+    vi.stubGlobal("navigator", { locks: { request } });
+    stubFetch({ [ApiPath.Logout]: [() => new Response(null, { status: HttpStatus.NoContent })] });
+    await logout();
+    expect(request).toHaveBeenCalledTimes(1);
+    expect(request.mock.calls[0][0]).toBe("auth-refresh");
+  });
+
   it("falls back to the in-tab refresh when navigator is undefined", async () => {
     vi.stubGlobal("navigator", undefined);
     const { calls } = stubFetch({
